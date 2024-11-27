@@ -1,0 +1,31 @@
+{
+  "name": "filterboxd",
+  "version": "0.0.1",
+  "description": "Userscript to filter titles on Letterboxd",
+  "main": "src/filterboxd.user.js",
+  "scripts": {
+    "lint": "eslint src/filterboxd.user.js",
+    "clean": "eslint --fix src/filterboxd.user.js",
+    "fix": "npm run clean && git add src/filterboxd.user.js",
+    "prepare": "husky install"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blakegearin/filterboxd.git"
+  },
+  "keywords": [
+    "userscript",
+    "letterboxd"
+  ],
+  "author": "Blake Gearin",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/blakegearin/filterboxd/issues"
+  },
+  "homepage": "https://github.com/blakegearin/filterboxd#readme",
+  "devDependencies": {
+    "eslint": "^8.52.0",
+    "eslint-plugin-userscripts": "^0.4.0",
+    "husky": "^8.0.3"
+  }
+}

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filterboxd
 // @namespace    https://github.com/blakegearin/filterboxd
-// @version      0.1.0
+// @version      0.2.0
 // @description  Filter titles on Letterboxd
 // @author       Blake Gearin
 // @match        https://letterboxd.com/*
@@ -61,8 +61,6 @@
       GMC.save();
     }
 
-    applyFilters();
-
     let userscriptStyle = document.createElement('style');
     userscriptStyle.setAttribute('id', 'filterboxd-style');
     userscriptStyle.textContent += `
@@ -70,19 +68,35 @@
       {
         ${GMC.get('hideStyle')}
       }
+
+      .${SELECTORS.settings.hiddenTitleSpanClass}
+      {
+        cursor: pointer;
+        margin-right: 0.3rem !important;
+      }
+
+      .${SELECTORS.settings.hiddenTitleSpanClass}:hover
+      {
+        background: #303840;
+        color: #def;
+      }
     `;
     document.body.appendChild(userscriptStyle);
+
+    applyFilters();
+    maybeAddConfigurationToSettings();
 
     startObserving();
   }
 
   function updateLogLevel() {
     CURRENT_LOG_LEVEL = {
-      'silent': SILENT,
-      'quiet': QUIET,
-      'debug': DEBUG,
-      'verbose': VERBOSE,
-      'trace': TRACE,
+      silent: SILENT,
+      quiet: QUIET,
+      info: INFO,
+      debug: DEBUG,
+      verbose: VERBOSE,
+      trace: TRACE,
     }[GMC.get('logLevel')];
   }
 
@@ -150,30 +164,88 @@
       self: '.film-poster-popmenu',
       userscriptListItemClass: 'userscriptListItem',
       addToWatchlist: '.film-poster-popmenu .add-to-watchlist',
+      addThisFilm: '.film-poster-popmenu .menu-item-add-this-film',
     },
     hiddenTitleClass: 'hidden-title',
     processedClass: {
       hide: 'hide-processed',
       unhide: 'unhide-processed',
     },
-    subnav: {
-      subscriptionsListItem: '.main-nav .subnav [href="/settings/subscriptions/"]',
-      filtersListItem: 'filtersListItem',
+    settings: {
+      clear: '.clear',
+      favoriteFilms: '.favourite-films-selector',
+      hiddenTitleSpanClass: 'hidden-title-span',
+      note: '.note',
+      posterList: '.poster-list',
+      subtitle: '.mob-subtitle',
     },
   };
 
-  function addFiltersToSubnav() {
-    log(DEBUG, 'addFiltersToSubnav()');
+  function maybeAddConfigurationToSettings() {
+    log(DEBUG, 'maybeAddConfigurationToSettings()');
 
-    const subscriptionsListItem = document.querySelector(SELECTORS.subnav.subscriptionsListItem).parentElement;
-    const filtersListItem = subscriptionsListItem.cloneNode(true);
-    filtersListItem.setAttribute('id', SELECTORS.filtersListItem);
+    const configurationId = 'filterboxd-configuration';
+    const configurationExists = document.querySelector(configurationId);
+    log(VERBOSE, 'configurationExists', configurationExists);
 
-    const filtersLink = filtersListItem.firstElementChild;
-    filtersLink.innerText = 'Filterboxd';
-    filtersLink.removeAttribute('href');
+    const onSettingsPage = window.location.href.includes('/settings/');
+    log(VERBOSE, 'onSettingsPage', onSettingsPage);
 
-    subscriptionsListItem.parentNode.insertBefore(filtersListItem, subscriptionsListItem);
+    if (!onSettingsPage || configurationExists) {
+      log(DEBUG, 'Not on settings page or configuration is present');
+
+      return;
+    }
+
+    log(DEBUG, 'On settings page and configuration not present');
+
+    const favoriteFilmsDiv = document.querySelector(SELECTORS.settings.favoriteFilms);
+    const userscriptConfigurationDiv = favoriteFilmsDiv.cloneNode(true);
+
+    userscriptConfigurationDiv.setAttribute('id', configurationId);
+    const posterList = userscriptConfigurationDiv.querySelector(SELECTORS.settings.posterList);
+    posterList.remove();
+
+    userscriptConfigurationDiv.setAttribute('style', 'margin-top: 4rem;');
+    userscriptConfigurationDiv.querySelector(SELECTORS.settings.subtitle).innerText = 'Filtered Films';
+    userscriptConfigurationDiv.querySelector(SELECTORS.settings.note).innerText = 'Click titles to remove.';
+
+    const hiddenTitlesParagraph = document.createElement('p');
+    let hiddenTitlesDiv = document.createElement('div');
+    hiddenTitlesDiv.classList.add('text-sluglist');
+
+    const hiddenTitles = getHiddenTitles();
+    log(VERBOSE, 'hiddenTitles', hiddenTitles);
+
+    hiddenTitles.forEach(hiddenTitle => {
+      log(VERBOSE, 'hiddenTitle', hiddenTitle);
+
+      let hiddenTitleSpan = document.createElement('span');
+
+      hiddenTitleSpan.classList.add(
+        'text-slug',
+        SELECTORS.processedClass.hide,
+        SELECTORS.settings.hiddenTitleSpanClass,
+      );
+      hiddenTitleSpan.setAttribute('data-film-id', hiddenTitle.id);
+      hiddenTitleSpan.innerText = `${hiddenTitle.name} (${hiddenTitle.year})`;
+
+      hiddenTitleSpan.onclick = () => {
+        unhideTitle(hiddenTitle);
+        removeFromHiddenTitles(hiddenTitle);
+        hiddenTitleSpan.remove();
+      };
+
+      hiddenTitlesParagraph.appendChild(hiddenTitleSpan);
+    });
+
+    hiddenTitlesDiv.appendChild(hiddenTitlesParagraph);
+
+    const clearDiv = userscriptConfigurationDiv.querySelector(SELECTORS.settings.clear);
+    clearDiv.remove();
+
+    userscriptConfigurationDiv.append(hiddenTitlesDiv);
+    favoriteFilmsDiv.parentNode.insertBefore(userscriptConfigurationDiv, favoriteFilmsDiv.nextSibling);
   }
 
   function addListItemToPopMenu() {
@@ -202,19 +274,25 @@
         userscriptListItem.classList.add(SELECTORS.filmPosterPopMenu.userscriptListItemClass);
 
         const userscriptLink = userscriptListItem.firstElementChild;
-        userscriptListItem.onclick = () => {
+        userscriptListItem.onclick = (event) => {
           event.preventDefault();
           log(DEBUG, 'userscriptListItem clicked');
 
-          const titleId = parseInt(event.target.getAttribute('data-film-id'));
-          const titleSlug = event.target.getAttribute('data-film-slug');
+          const link = event.target;
+
+          const id = parseInt(link.getAttribute('data-film-id'));
+          const slug = link.getAttribute('data-film-slug');
+          const name = link.getAttribute('data-film-name');
+          const year = link.getAttribute('data-film-release-year');
 
           const titleMetadata = {
-            id: titleId,
-            slug: titleSlug,
+            id,
+            slug,
+            name,
+            year,
           };
 
-          const titleIsHidden = event.target.getAttribute('data-title-hidden') === 'true';
+          const titleIsHidden = link.getAttribute('data-title-hidden') === 'true';
           if (titleIsHidden) {
             unhideTitle(titleMetadata);
             removeFromHiddenTitles(titleMetadata);
@@ -223,7 +301,7 @@
             addToHiddenTitles(titleMetadata);
           }
 
-          updateLinkInPopMenu(!titleIsHidden, event.target);
+          updateLinkInPopMenu(!titleIsHidden, link);
         };
 
         const addToWatchlistLink = filmPosterPopMenu.querySelector(SELECTORS.filmPosterPopMenu.addToWatchlist);
@@ -239,6 +317,12 @@
         const slugMatch = /\/film\/([^/]+)\/add-to-watchlist\//;
         const titleSlug = addToWatchlistLink.getAttribute('data-action').match(slugMatch)?.[1];
         userscriptLink.setAttribute('data-film-slug', titleSlug);
+
+        const addThisFilmLink = filmPosterPopMenu.querySelector(SELECTORS.filmPosterPopMenu.addThisFilm);
+        const titleName = addThisFilmLink.getAttribute('data-film-name');
+        userscriptLink.setAttribute('data-film-name', titleName);
+        const titleYear = addThisFilmLink.getAttribute('data-film-release-year');
+        userscriptLink.setAttribute('data-film-release-year', titleYear);
 
         const titleIsHidden = getHiddenTitles().some(hiddenTitle => hiddenTitle.id === titleId);
         updateLinkInPopMenu(titleIsHidden, userscriptLink);
@@ -257,6 +341,7 @@
 
     const hiddenTitles = getHiddenTitles();
     hiddenTitles.push(titleMetadata);
+    log(VERBOSE, 'hiddenTitles', hiddenTitles);
 
     GMC.set('hiddenTitles', JSON.stringify(hiddenTitles));
     GMC.save();
@@ -266,6 +351,8 @@
     log(DEBUG, 'applyFilters()');
 
     const hiddenTitles = getHiddenTitles();
+    log(VERBOSE, 'hiddenTitles', hiddenTitles);
+
     hiddenTitles.forEach(titleMetadata => hideTitle(titleMetadata));
   }
 
@@ -285,6 +372,8 @@
         break;
       }
     }
+
+    log(VERBOSE, 'target', target);
 
     modifyThenObserve(() => {
       target.classList.add(SELECTORS.hiddenTitleClass);
@@ -318,8 +407,13 @@
       posterElement.classList.add(SELECTORS.processedClass.hide);
     });
 
+    // TODO: Diary
+
     // Popular with friends, competitions
-    document.querySelectorAll(`div:not(.popmenu) [data-film-id="${id}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
+    const remainingElements = document.querySelectorAll(
+      `div:not(.popmenu):not(.actions-panel) [data-film-id="${id}"]:not(aside [data-film-id="${id}"]):not(.${SELECTORS.processedClass.hide})`,
+    );
+    remainingElements.forEach(posterElement => {
       hideElement(posterElement, 0);
     });
   }
@@ -388,11 +482,9 @@
 
     link.setAttribute('data-title-hidden', titleIsHidden);
 
-    const innerText = titleIsHidden ? 'Remove from Filterboxd' : 'Add to Filterboxd';
+    const innerText = titleIsHidden ? 'Remove from filter' : 'Add to filter';
     link.innerText = innerText;
   }
-
-  addFiltersToSubnav();
 
   let OBSERVER = new MutationObserver(observeAndModify);
 

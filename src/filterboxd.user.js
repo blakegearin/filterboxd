@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filterboxd
 // @namespace    https://github.com/blakegearin/filterboxd
-// @version      0.0.2
+// @version      0.1.0
 // @description  Filter titles on Letterboxd
 // @author       Blake Gearin
 // @match        https://letterboxd.com/*
@@ -17,6 +17,8 @@
 
 (function() {
   'use strict';
+
+  const RESET = false;
 
   const SILENT = 0;
   const QUIET = 1;
@@ -51,6 +53,13 @@
     log(QUIET, 'Running');
 
     GMC.css.basic = '';
+
+    if (RESET) {
+      log(QUIET, 'Resetting GMC');
+      GMC.set('hiddenTitles', JSON.stringify([]));
+      GMC.reset();
+      GMC.save();
+    }
 
     applyFilters();
 
@@ -121,7 +130,7 @@
 
       log(TRACE, 'mutation', mutation);
 
-      const outcome = addHideToPopMenu();
+      const outcome = addListItemToPopMenu();
       applyFilters();
 
       log(DEBUG, 'outcome', outcome);
@@ -137,16 +146,19 @@
   let IDLE_MUTATION_COUNT = 0;
   let UPDATES_COUNT = 0;
   let SELECTORS = {
-    processedClass: 'hide-processed',
+    filmPosterPopMenu: {
+      self: '.film-poster-popmenu',
+      userscriptListItemClass: 'userscriptListItem',
+      addToWatchlist: '.film-poster-popmenu .add-to-watchlist',
+    },
     hiddenTitleClass: 'hidden-title',
+    processedClass: {
+      hide: 'hide-processed',
+      unhide: 'unhide-processed',
+    },
     subnav: {
       subscriptionsListItem: '.main-nav .subnav [href="/settings/subscriptions/"]',
       filtersListItem: 'filtersListItem',
-    },
-    filmPosterPopMenu: {
-      self: '.film-poster-popmenu',
-      hideListItem: 'hideListItem',
-      addToWatchlist: '.film-poster-popmenu .add-to-watchlist',
     },
   };
 
@@ -158,14 +170,14 @@
     filtersListItem.setAttribute('id', SELECTORS.filtersListItem);
 
     const filtersLink = filtersListItem.firstElementChild;
-    filtersLink.setAttribute('innerText', 'Filters');
+    filtersLink.innerText = 'Filterboxd';
     filtersLink.removeAttribute('href');
 
     subscriptionsListItem.parentNode.insertBefore(filtersListItem, subscriptionsListItem);
   }
 
-  function addHideToPopMenu() {
-    log(DEBUG, 'addHideToPopMenu()');
+  function addListItemToPopMenu() {
+    log(DEBUG, 'addListItemToPopMenu()');
 
     const filmPosterPopMenus = document.querySelectorAll(SELECTORS.filmPosterPopMenu.self);
 
@@ -175,8 +187,8 @@
     }
 
     filmPosterPopMenus.forEach(filmPosterPopMenu => {
-      const hideListItem = filmPosterPopMenu.querySelector(`.${SELECTORS.filmPosterPopMenu.hideListItem}`)
-      if (hideListItem) return;
+      const userscriptListItem = filmPosterPopMenu.querySelector(`.${SELECTORS.filmPosterPopMenu.userscriptListItemClass}`);
+      if (userscriptListItem) return;
 
       const lastListItem = filmPosterPopMenu.querySelector('li:last-of-type');
 
@@ -186,11 +198,13 @@
       }
 
       modifyThenObserve(() => {
-        const hideListItem = lastListItem.cloneNode(true);
-        hideListItem.classList.add(SELECTORS.filmPosterPopMenu.hideListItem);
-        hideListItem.onclick = () => {
+        const userscriptListItem = lastListItem.cloneNode(true);
+        userscriptListItem.classList.add(SELECTORS.filmPosterPopMenu.userscriptListItemClass);
+
+        const userscriptLink = userscriptListItem.firstElementChild;
+        userscriptListItem.onclick = () => {
           event.preventDefault();
-          log('hideListItem clicked', DEBUG);
+          log(DEBUG, 'userscriptListItem clicked');
 
           const titleId = parseInt(event.target.getAttribute('data-film-id'));
           const titleSlug = event.target.getAttribute('data-film-slug');
@@ -200,12 +214,17 @@
             slug: titleSlug,
           };
 
-          hideTitle(titleMetadata);
-          addToHiddenTitles(titleMetadata);
-        };
+          const titleIsHidden = event.target.getAttribute('data-title-hidden') === 'true';
+          if (titleIsHidden) {
+            unhideTitle(titleMetadata);
+            removeFromHiddenTitles(titleMetadata);
+          } else {
+            hideTitle(titleMetadata);
+            addToHiddenTitles(titleMetadata);
+          }
 
-        const hideLink = hideListItem.firstElementChild;
-        hideLink.innerText = 'Hide with filters';
+          updateLinkInPopMenu(!titleIsHidden, event.target);
+        };
 
         const addToWatchlistLink = filmPosterPopMenu.querySelector(SELECTORS.filmPosterPopMenu.addToWatchlist);
 
@@ -214,18 +233,19 @@
           return 'break';
         }
 
-        const titleId = addToWatchlistLink.getAttribute('data-film-id');
-        hideLink.setAttribute('data-film-id', titleId);
+        const titleId = parseInt(addToWatchlistLink.getAttribute('data-film-id'));
+        userscriptLink.setAttribute('data-film-id', titleId);
 
         const slugMatch = /\/film\/([^/]+)\/add-to-watchlist\//;
         const titleSlug = addToWatchlistLink.getAttribute('data-action').match(slugMatch)?.[1];
-        hideLink.setAttribute('data-film-slug', titleSlug);
+        userscriptLink.setAttribute('data-film-slug', titleSlug);
 
-        hideLink.removeAttribute('class');
+        const titleIsHidden = getHiddenTitles().some(hiddenTitle => hiddenTitle.id === titleId);
+        updateLinkInPopMenu(titleIsHidden, userscriptLink);
 
-        modifyThenObserve(() => {
-          lastListItem.parentNode.append(hideListItem);
-        });
+        userscriptLink.removeAttribute('class');
+
+        lastListItem.parentNode.append(userscriptListItem);
       });
     });
 
@@ -233,12 +253,13 @@
   }
 
   function addToHiddenTitles(titleMetadata) {
+    log(DEBUG, 'addToHiddenTitles()');
+
     const hiddenTitles = getHiddenTitles();
     hiddenTitles.push(titleMetadata);
 
     GMC.set('hiddenTitles', JSON.stringify(hiddenTitles));
     GMC.save();
-
   }
 
   function applyFilters() {
@@ -252,53 +273,123 @@
     return JSON.parse(GMC.get('hiddenTitles'));
   }
 
+  function hideElement(element, levelsUp = 0) {
+    log(DEBUG, 'hideElement()');
+
+    let target = element;
+
+    for (let i = 0; i < levelsUp; i++) {
+      if (target.parentNode) {
+        target = target.parentNode;
+      } else {
+        break;
+      }
+    }
+
+    modifyThenObserve(() => {
+      target.classList.add(SELECTORS.hiddenTitleClass);
+    });
+  }
+
   function hideTitle({ id, slug }) {
     log(DEBUG, 'hideTitle()');
-
-    const hideElement = (element, levelsUp = 0) => {
-      let target = element;
-
-      for (let i = 0; i < levelsUp; i++) {
-        if (target.parentNode) {
-          target = target.parentNode;
-        } else {
-          break;
-        }
-      }
-
-      modifyThenObserve(() => {
-        target.classList.add(SELECTORS.hiddenTitleClass);
-      });
-    };
 
     // Activity page reviews
     document.querySelectorAll(`section.activity-row [data-film-id="${id}"]`).forEach(posterElement => {
       hideElement(posterElement, 3);
-      posterElement.classList.add(SELECTORS.processedClass);
+      posterElement.classList.add(SELECTORS.processedClass.hide);
     });
 
     // Activity page likes
-    document.querySelectorAll(`section.activity-row .activity-summary a[href*="${slug}"]:not(.${SELECTORS.processedClass})`).forEach(posterElement => {
+    document.querySelectorAll(`section.activity-row .activity-summary a[href*="${slug}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
       hideElement(posterElement, 3);
-      posterElement.classList.add(SELECTORS.processedClass);
+      posterElement.classList.add(SELECTORS.processedClass.hide);
     });
 
     // New from friends
-    document.querySelectorAll(`.poster-container [data-film-id="${id}"]:not(.${SELECTORS.processedClass})`).forEach(posterElement => {
+    document.querySelectorAll(`.poster-container [data-film-id="${id}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
       hideElement(posterElement, 1);
-      posterElement.classList.add(SELECTORS.processedClass);
+      posterElement.classList.add(SELECTORS.processedClass.hide);
     });
 
     // Reviews
-    document.querySelectorAll(`.review-tile [data-film-id="${id}"]:not(.${SELECTORS.processedClass})`).forEach(posterElement => {
+    document.querySelectorAll(`.review-tile [data-film-id="${id}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
       hideElement(posterElement, 3);
-      posterElement.classList.add(SELECTORS.processedClass);
+      posterElement.classList.add(SELECTORS.processedClass.hide);
     });
 
     // Popular with friends, competitions
-    document.querySelectorAll(`div:not(.popmenu) [data-film-id="${id}"]:not(.${SELECTORS.processedClass})`).forEach(posterElement => {
+    document.querySelectorAll(`div:not(.popmenu) [data-film-id="${id}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
       hideElement(posterElement, 0);
     });
+  }
+
+  function removeFromHiddenTitles(titleMetadata) {
+    let hiddenTitles = getHiddenTitles();
+    hiddenTitles = hiddenTitles.filter(hiddenTitle => hiddenTitle.id !== titleMetadata.id);
+
+    GMC.set('hiddenTitles', JSON.stringify(hiddenTitles));
+    GMC.save();
+  }
+
+  function unhideElement(element, levelsUp = 0) {
+    log(DEBUG, 'unhideElement()');
+
+    let target = element;
+
+    for (let i = 0; i < levelsUp; i++) {
+      if (target.parentNode) {
+        target = target.parentNode;
+      } else {
+        break;
+      }
+    }
+
+    modifyThenObserve(() => {
+      target.classList.remove(SELECTORS.hiddenTitleClass);
+    });
+  }
+
+  function unhideTitle({ id, slug }) {
+    log(DEBUG, 'unhideTitle()');
+
+    // Activity page reviews
+    document.querySelectorAll(`section.activity-row [data-film-id="${id}"]`).forEach(posterElement => {
+      unhideElement(posterElement, 3);
+      posterElement.classList.add(SELECTORS.processedClass.unhide);
+    });
+
+    // Activity page likes
+    document.querySelectorAll(`section.activity-row .activity-summary a[href*="${slug}"]:not(.${SELECTORS.processedClass.unhide})`).forEach(posterElement => {
+      unhideElement(posterElement, 3);
+      posterElement.classList.add(SELECTORS.processedClass.unhide);
+    });
+
+    // New from friends
+    document.querySelectorAll(`.poster-container [data-film-id="${id}"]:not(.${SELECTORS.processedClass.unhide})`).forEach(posterElement => {
+      unhideElement(posterElement, 1);
+      posterElement.classList.add(SELECTORS.processedClass.unhide);
+    });
+
+    // Reviews
+    document.querySelectorAll(`.review-tile [data-film-id="${id}"]:not(.${SELECTORS.processedClass.unhide})`).forEach(posterElement => {
+      unhideElement(posterElement, 3);
+      posterElement.classList.add(SELECTORS.processedClass.unhide);
+    });
+
+    // Popular with friends, competitions
+    document.querySelectorAll(`div:not(.popmenu) [data-film-id="${id}"]:not(.${SELECTORS.processedClass.unhide})`).forEach(posterElement => {
+      unhideElement(posterElement, 0);
+    });
+  }
+
+  function updateLinkInPopMenu(titleIsHidden, link) {
+    log(DEBUG, 'updateLinkInPopMenu()');
+
+    link.setAttribute('data-title-hidden', titleIsHidden);
+
+    const innerText = titleIsHidden ? 'Remove from Filterboxd' : 'Add to Filterboxd';
+    link.innerText = innerText;
   }
 
   addFiltersToSubnav();
@@ -313,11 +404,11 @@
     fields: {
       hiddenTitles: {
         type: 'text',
-        default: '',
+        default: JSON.stringify([]),
       },
       hideStyle: {
         type: 'text',
-        default: 'opacity: 0.1;',
+        default: 'opacity: 0.05;',
       },
       logLevel: {
         label: 'Log level',

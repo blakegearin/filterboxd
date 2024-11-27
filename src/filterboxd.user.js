@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filterboxd
 // @namespace    https://github.com/blakegearin/filterboxd
-// @version      0.0.1
+// @version      0.0.2
 // @description  Filter titles on Letterboxd
 // @author       Blake Gearin
 // @match        https://letterboxd.com/*
@@ -41,24 +41,6 @@
     if (variable) console.log(variable);
   }
 
-  function createId(string) {
-    log(TRACE, 'createId()');
-
-    if (string.startsWith('#')) return string;
-
-    if (string.startsWith('.')) {
-      logError(`Attempted to create an id from a class: "${string}"`);
-      return;
-    }
-
-    if (string.startsWith('[')) {
-      logError(`Attempted to create an id from an attribute selector: "${string}"`);
-      return;
-    }
-
-    return `#${string}`;
-  }
-
   log(TRACE, 'Starting');
 
   function gmcInitialized() {
@@ -71,6 +53,17 @@
     GMC.css.basic = '';
 
     applyFilters();
+
+    let userscriptStyle = document.createElement('style');
+    userscriptStyle.setAttribute('id', 'filterboxd-style');
+    userscriptStyle.textContent += `
+      .${SELECTORS.hiddenTitleClass}
+      {
+        ${GMC.get('hideStyle')}
+      }
+    `;
+    document.body.appendChild(userscriptStyle);
+
     startObserving();
   }
 
@@ -144,6 +137,8 @@
   let IDLE_MUTATION_COUNT = 0;
   let UPDATES_COUNT = 0;
   let SELECTORS = {
+    processedClass: 'hide-processed',
+    hiddenTitleClass: 'hidden-title',
     subnav: {
       subscriptionsListItem: '.main-nav .subnav [href="/settings/subscriptions/"]',
       filtersListItem: 'filtersListItem',
@@ -151,65 +146,19 @@
     filmPosterPopMenu: {
       self: '.film-poster-popmenu',
       hideListItem: 'hideListItem',
-      addThisFilm: '.film-poster-popmenu .menu-item-add-this-film',
+      addToWatchlist: '.film-poster-popmenu .add-to-watchlist',
     },
   };
-
-  function applyFilters() {
-    log(DEBUG, 'applyFilters()');
-
-    GMC.get('hiddenTitles').split(',').forEach(id => hideTitle(id));
-  }
-
-  function applyHideStyle(element) {
-    element.style.cssText += GMC.get('hideStyle');
-  }
-
-  function hideTitle(id) {
-    log(DEBUG, 'hideTitle()');
-
-    const processedClass = 'hide-processed';
-
-    const hideElement = (element, levelsUp = 0) => {
-      let target = element;
-      for (let i = 0; i < levelsUp; i++) {
-        if (target.parentNode) {
-          target = target.parentNode;
-        } else {
-          break;
-        }
-      }
-
-      applyHideStyle(target);
-    };
-
-    // New from friends
-    document.querySelectorAll(`.poster-container [data-film-id="${id}"]`).forEach(film => {
-      hideElement(film, 1);
-      film.classList.add(processedClass);
-    });
-
-    // Reviews
-    document.querySelectorAll(`.review-tile [data-film-id="${id}"]:not(.${processedClass})`).forEach(film => {
-      hideElement(film, 3);
-      film.classList.add(processedClass);
-    });
-
-    // Popular with friends, competitions
-    document.querySelectorAll(`[data-film-id="${id}"]:not(.${processedClass})`).forEach(film => {
-      hideElement(film, 0);
-    });
-  }
 
   function addFiltersToSubnav() {
     log(DEBUG, 'addFiltersToSubnav()');
 
     const subscriptionsListItem = document.querySelector(SELECTORS.subnav.subscriptionsListItem).parentElement;
     const filtersListItem = subscriptionsListItem.cloneNode(true);
-    filtersListItem.id = SELECTORS.filtersListItem;
+    filtersListItem.setAttribute('id', SELECTORS.filtersListItem);
 
     const filtersLink = filtersListItem.firstElementChild;
-    filtersLink.innerText = 'Filters';
+    filtersLink.setAttribute('innerText', 'Filters');
     filtersLink.removeAttribute('href');
 
     subscriptionsListItem.parentNode.insertBefore(filtersListItem, subscriptionsListItem);
@@ -244,34 +193,112 @@
           log('hideListItem clicked', DEBUG);
 
           const titleId = parseInt(event.target.getAttribute('data-film-id'));
-          hideTitle(titleId);
+          const titleSlug = event.target.getAttribute('data-film-slug');
 
-          const hiddenTitles = GMC.get('hiddenTitles').split(',').filter(Boolean);
-          hiddenTitles.push(titleId);
+          const titleMetadata = {
+            id: titleId,
+            slug: titleSlug,
+          };
 
-          GMC.set('hiddenTitles', hiddenTitles.join(','));
-          GMC.save();
+          hideTitle(titleMetadata);
+          addToHiddenTitles(titleMetadata);
         };
 
         const hideLink = hideListItem.firstElementChild;
         hideLink.innerText = 'Hide with filters';
 
-        const addThisFilmLink = filmPosterPopMenu.querySelector(SELECTORS.filmPosterPopMenu.addThisFilm)
+        const addToWatchlistLink = filmPosterPopMenu.querySelector(SELECTORS.filmPosterPopMenu.addToWatchlist);
 
-        if (!addThisFilmLink) {
-          logError(`Selector ${SELECTORS.filmPosterPopMenu.addThisFilm} not found`);
+        if (!addToWatchlistLink) {
+          logError(`Selector ${SELECTORS.filmPosterPopMenu.addToWatchlist} not found`);
           return 'break';
         }
 
-        const titleId = addThisFilmLink.getAttribute('data-film-id');
+        const titleId = addToWatchlistLink.getAttribute('data-film-id');
         hideLink.setAttribute('data-film-id', titleId);
+
+        const slugMatch = /\/film\/([^/]+)\/add-to-watchlist\//;
+        const titleSlug = addToWatchlistLink.getAttribute('data-action').match(slugMatch)?.[1];
+        hideLink.setAttribute('data-film-slug', titleSlug);
+
         hideLink.removeAttribute('class');
 
-        lastListItem.parentNode.append(hideListItem);
+        modifyThenObserve(() => {
+          lastListItem.parentNode.append(hideListItem);
+        });
       });
     });
 
     return;
+  }
+
+  function addToHiddenTitles(titleMetadata) {
+    const hiddenTitles = getHiddenTitles();
+    hiddenTitles.push(titleMetadata);
+
+    GMC.set('hiddenTitles', JSON.stringify(hiddenTitles));
+    GMC.save();
+
+  }
+
+  function applyFilters() {
+    log(DEBUG, 'applyFilters()');
+
+    const hiddenTitles = getHiddenTitles();
+    hiddenTitles.forEach(titleMetadata => hideTitle(titleMetadata));
+  }
+
+  function getHiddenTitles() {
+    return JSON.parse(GMC.get('hiddenTitles'));
+  }
+
+  function hideTitle({ id, slug }) {
+    log(DEBUG, 'hideTitle()');
+
+    const hideElement = (element, levelsUp = 0) => {
+      let target = element;
+
+      for (let i = 0; i < levelsUp; i++) {
+        if (target.parentNode) {
+          target = target.parentNode;
+        } else {
+          break;
+        }
+      }
+
+      modifyThenObserve(() => {
+        target.classList.add(SELECTORS.hiddenTitleClass);
+      });
+    };
+
+    // Activity page reviews
+    document.querySelectorAll(`section.activity-row [data-film-id="${id}"]`).forEach(posterElement => {
+      hideElement(posterElement, 3);
+      posterElement.classList.add(SELECTORS.processedClass);
+    });
+
+    // Activity page likes
+    document.querySelectorAll(`section.activity-row .activity-summary a[href*="${slug}"]:not(.${SELECTORS.processedClass})`).forEach(posterElement => {
+      hideElement(posterElement, 3);
+      posterElement.classList.add(SELECTORS.processedClass);
+    });
+
+    // New from friends
+    document.querySelectorAll(`.poster-container [data-film-id="${id}"]:not(.${SELECTORS.processedClass})`).forEach(posterElement => {
+      hideElement(posterElement, 1);
+      posterElement.classList.add(SELECTORS.processedClass);
+    });
+
+    // Reviews
+    document.querySelectorAll(`.review-tile [data-film-id="${id}"]:not(.${SELECTORS.processedClass})`).forEach(posterElement => {
+      hideElement(posterElement, 3);
+      posterElement.classList.add(SELECTORS.processedClass);
+    });
+
+    // Popular with friends, competitions
+    document.querySelectorAll(`div:not(.popmenu) [data-film-id="${id}"]:not(.${SELECTORS.processedClass})`).forEach(posterElement => {
+      hideElement(posterElement, 0);
+    });
   }
 
   addFiltersToSubnav();

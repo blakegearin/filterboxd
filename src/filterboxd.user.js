@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filterboxd
 // @namespace    https://github.com/blakegearin/filterboxd
-// @version      0.4.0
+// @version      0.5.0
 // @description  Filter titles on Letterboxd
 // @author       Blake Gearin
 // @match        https://letterboxd.com/*
@@ -99,6 +99,7 @@
 
       log(TRACE, 'mutation', mutation);
 
+      maybeAddListItemToSidebar();
       const outcome = addListItemToPopMenu();
       applyFilters();
 
@@ -109,6 +110,24 @@
     }
   }
 
+  function createId(string) {
+    log(TRACE, 'createId()');
+
+    if (string.startsWith('#')) return string;
+
+    if (string.startsWith('.')) {
+      logError(`Attempted to create an id from a class: "${string}"`);
+      return;
+    }
+
+    if (string.startsWith('[')) {
+      logError(`Attempted to create an id from an attribute selector: "${string}"`);
+      return;
+    }
+
+    return `#${string}`;
+  }
+
   const MAX_IDLE_MUTATIONS = 100;
   const MAX_HEADER_UPDATES = 100;
 
@@ -117,8 +136,8 @@
   let SELECTORS = {
     filmPosterPopMenu: {
       self: '.film-poster-popmenu',
-      userscriptListItemClass: 'userscriptListItem',
-      addToWatchlist: '.film-poster-popmenu .add-to-watchlist',
+      userscriptListItemClass: 'filterboxd-list-item',
+      addToList: '.film-poster-popmenu .menu-item-add-to-list',
       addThisFilm: '.film-poster-popmenu .menu-item-add-this-film',
     },
     filterTitleClass: 'filter-title',
@@ -134,6 +153,11 @@
       posterList: '.poster-list',
       savedBadgeClass: 'filtered-saved',
       subtitle: '.mob-subtitle',
+    },
+    userpanel: {
+      self: '#userpanel',
+      userscriptListItemId: 'filterboxd-list-item',
+      addThisFilm: '#userpanel .add-this-film',
     },
   };
 
@@ -178,71 +202,112 @@
         return 'break';
       }
 
+      const addToListLink = filmPosterPopMenu.querySelector(SELECTORS.filmPosterPopMenu.addToList);
+      if (!addToListLink) {
+        logError(`Selector ${SELECTORS.filmPosterPopMenu.addToList} not found`);
+        return 'break';
+      }
+
+      const addThisFilmLink = filmPosterPopMenu.querySelector(SELECTORS.filmPosterPopMenu.addThisFilm);
+      if (!addThisFilmLink) {
+        logError(`Selector ${SELECTORS.filmPosterPopMenu.addThisFilm} not found`);
+        return 'break';
+      }
+
       modifyThenObserve(() => {
-        const userscriptListItem = lastListItem.cloneNode(true);
+        let userscriptListItem = lastListItem.cloneNode(true);
         userscriptListItem.classList.add(SELECTORS.filmPosterPopMenu.userscriptListItemClass);
 
-        const userscriptLink = userscriptListItem.firstElementChild;
-        userscriptListItem.onclick = (event) => {
-          event.preventDefault();
-          log(DEBUG, 'userscriptListItem clicked');
-
-          const link = event.target;
-
-          const id = parseInt(link.getAttribute('data-film-id'));
-          const slug = link.getAttribute('data-film-slug');
-          const name = link.getAttribute('data-film-name');
-          const year = link.getAttribute('data-film-release-year');
-
-          const titleMetadata = {
-            id,
-            slug,
-            name,
-            year,
-          };
-
-          const titleIsHidden = link.getAttribute('data-title-hidden') === 'true';
-          if (titleIsHidden) {
-            removeTitle(titleMetadata);
-            removeFromFilterTitles(titleMetadata);
-          } else {
-            addTitle(titleMetadata);
-            addToHiddenTitles(titleMetadata);
-          }
-
-          updateLinkInPopMenu(!titleIsHidden, link);
-        };
-
-        const addToWatchlistLink = filmPosterPopMenu.querySelector(SELECTORS.filmPosterPopMenu.addToWatchlist);
-
-        if (!addToWatchlistLink) {
-          logError(`Selector ${SELECTORS.filmPosterPopMenu.addToWatchlist} not found`);
-          return 'break';
-        }
-
-        const titleId = parseInt(addToWatchlistLink.getAttribute('data-film-id'));
-        userscriptLink.setAttribute('data-film-id', titleId);
-
-        const slugMatch = /\/film\/([^/]+)\/add-to-watchlist\//;
-        const titleSlug = addToWatchlistLink.getAttribute('data-action').match(slugMatch)?.[1];
-        userscriptLink.setAttribute('data-film-slug', titleSlug);
-
-        const addThisFilmLink = filmPosterPopMenu.querySelector(SELECTORS.filmPosterPopMenu.addThisFilm);
-        const titleName = addThisFilmLink.getAttribute('data-film-name');
-        userscriptLink.setAttribute('data-film-name', titleName);
-        const titleYear = addThisFilmLink.getAttribute('data-film-release-year');
-        userscriptLink.setAttribute('data-film-release-year', titleYear);
-
-        const titleIsHidden = getFilteredTitles().some(hiddenTitle => hiddenTitle.id === titleId);
-        updateLinkInPopMenu(titleIsHidden, userscriptLink);
-
-        userscriptLink.removeAttribute('class');
+        userscriptListItem = buildUserscriptLink(userscriptListItem, addToListLink, addThisFilmLink);
 
         lastListItem.parentNode.append(userscriptListItem);
       });
     });
 
     return;
+  }
+
+  function buildUserscriptLink(userscriptListItem, addToListLink, addThisFilmLink) {
+    const userscriptLink = userscriptListItem.firstElementChild;
+    userscriptListItem.onclick = (event) => {
+      event.preventDefault();
+      log(DEBUG, 'userscriptListItem clicked');
+
+      const link = event.target;
+
+      const id = parseInt(link.getAttribute('data-film-id'));
+      const slug = link.getAttribute('data-film-slug');
+      const name = link.getAttribute('data-film-name');
+      const year = link.getAttribute('data-film-release-year');
+
+      const titleMetadata = {
+        id,
+        slug,
+        name,
+        year,
+      };
+
+      const titleIsHidden = link.getAttribute('data-title-hidden') === 'true';
+      if (titleIsHidden) {
+        removeTitle(titleMetadata);
+        removeFromFilterTitles(titleMetadata);
+      } else {
+        addTitle(titleMetadata);
+        addToHiddenTitles(titleMetadata);
+      }
+
+      updateLinkInPopMenu(!titleIsHidden, link);
+    };
+
+    const titleId = parseInt(addToListLink.getAttribute('data-film-id'));
+    userscriptLink.setAttribute('data-film-id', titleId);
+
+    const filmAction = addToListLink.getAttribute('data-new-list-with-film-action');
+    log(VERBOSE, 'filmAction', filmAction);
+
+    const titleSlug = filmAction.split('/').at(-2);
+    userscriptLink.setAttribute('data-film-slug', titleSlug);
+
+    const titleName = addThisFilmLink.getAttribute('data-film-name');
+    userscriptLink.setAttribute('data-film-name', titleName);
+    const titleYear = addThisFilmLink.getAttribute('data-film-release-year');
+    userscriptLink.setAttribute('data-film-release-year', titleYear);
+
+    const titleIsHidden = getFilteredTitles().some(hiddenTitle => hiddenTitle.id === titleId);
+    updateLinkInPopMenu(titleIsHidden, userscriptLink);
+
+    userscriptLink.removeAttribute('class');
+
+    return userscriptListItem;
+  }
+
+  function maybeAddListItemToSidebar() {
+    log(DEBUG, 'maybeAddListItemToSidebar()');
+
+    if (document.querySelector(createId(SELECTORS.userpanel.userscriptListItemId))) return;
+
+    const userpanel = document.querySelector(SELECTORS.userpanel.self);
+
+    if (!userpanel) {
+      log(INFO, 'Userpanel not found');
+      return;
+    }
+
+    const secondLastListItem = userpanel.querySelector('li:nth-last-child(2)');
+    if (!secondLastListItem ) {
+      log(INFO, 'Second last list item not found');
+      return;
+    }
+
+    let userscriptListItem = secondLastListItem.cloneNode(true);
+    userscriptListItem.setAttribute('id', SELECTORS.userpanel.userscriptListItemId);
+
+    const addToListLink = secondLastListItem.firstElementChild;
+    const addThisFilmLink = userpanel.querySelector(SELECTORS.userpanel.addThisFilm);
+
+    userscriptListItem = buildUserscriptLink(userscriptListItem, addToListLink, addThisFilmLink);
+
+    secondLastListItem.parentNode.insertBefore(userscriptListItem, userpanel.querySelector('li:nth-last-of-type(1)'));
   }
 
   function addTitle({ id, slug }) {

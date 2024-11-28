@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filterboxd
 // @namespace    https://github.com/blakegearin/filterboxd
-// @version      0.6.0
+// @version      0.7.0
 // @description  Filter titles on Letterboxd
 // @author       Blake Gearin
 // @match        https://letterboxd.com/*
@@ -130,6 +130,7 @@
 
   const MAX_IDLE_MUTATIONS = 100;
   const MAX_HEADER_UPDATES = 100;
+  const BEHAVIORS = [ 'Remove', 'Fade', 'Blur', 'Custom' ];
 
   let IDLE_MUTATION_COUNT = 0;
   let UPDATES_COUNT = 0;
@@ -459,6 +460,9 @@
     const behaviorFadeAmount = GMC.get('behaviorFadeAmount');
     log(VERBOSE, 'behaviorFadeAmount', behaviorFadeAmount);
 
+    const behaviorBlurAmount = GMC.get('behaviorBlurAmount');
+    log(VERBOSE, 'behaviorBlurAmount', behaviorBlurAmount);
+
     const behaviorCustomValue = GMC.get('behaviorCustomValue');
     log(VERBOSE, 'behaviorCustomValue', behaviorCustomValue);
 
@@ -468,6 +472,9 @@
         break;
       case 'Fade':
         behaviorStyle = `opacity: ${behaviorFadeAmount}%`;
+        break;
+      case 'Blur':
+        behaviorStyle = `filter: blur(${behaviorBlurAmount}px)`;
         break;
       case 'Custom':
         behaviorStyle = behaviorCustomValue;
@@ -598,7 +605,7 @@
       labelText: 'Behavior',
       inputValue: behaviorValue,
       inputType: 'select',
-      selectArray: [ 'Remove', 'Fade', 'Custom' ],
+      selectArray: BEHAVIORS,
       selectOnChange: behaviorChange,
     });
 
@@ -621,6 +628,24 @@
     });
 
     formColumnsDiv.appendChild(fadeAmountFormRow);
+
+    // Blur amount
+    const behaviorBlurAmount = parseInt(GMC.get('behaviorBlurAmount'));
+    log(DEBUG, 'behaviorBlurAmount', behaviorBlurAmount);
+
+    const blurAmountFormRow = createFormRow({
+      formRowClass: ['update-details'],
+      formRowStyle: 'width: 68.8%; float: right; display: var(--filterboxd-behavior-blur);',
+      labelText: 'Amount',
+      inputValue: behaviorBlurAmount,
+      inputType: 'select',
+      inputStyle: 'width: 100px !important;',
+      selectArray: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 1000 ],
+      notes: 'px',
+      notesStyle: 'width: 10px; margin-left: 14px;',
+    });
+
+    formColumnsDiv.appendChild(blurAmountFormRow);
 
     // Custom CSS
     const behaviorCustomValue = GMC.get('behaviorCustomValue');
@@ -664,7 +689,14 @@
 
         GMC.set('behaviorFadeAmount', behaviorFadeAmount);
         GMC.save();
-      } else if (behaviorType === 'Custom') {
+      } else if (behaviorType === 'Blur') {
+        const behaviorBlurAmount = blurAmountFormRow.querySelector('select').value;
+        log(DEBUG, 'behaviorBlurAmount', behaviorBlurAmount);
+
+        GMC.set('behaviorBlurAmount', behaviorBlurAmount);
+        GMC.save();
+      }
+      else if (behaviorType === 'Custom') {
         const behaviorCustomValue = cssFormRow.querySelector('input').value;
         log(DEBUG, 'behaviorCustomValue', behaviorCustomValue);
 
@@ -800,6 +832,9 @@
     const fadeValue = behaviorType === 'Fade' ? 'block' : 'none';
     document.documentElement.style.setProperty('--filterboxd-behavior-fade', fadeValue);
 
+    const blurValue = behaviorType === 'Blur' ? 'block' : 'none';
+    document.documentElement.style.setProperty('--filterboxd-behavior-blur', blurValue);
+
     const customValue = behaviorType === 'Custom' ? 'block' : 'none';
     document.documentElement.style.setProperty('--filterboxd-behavior-custom', customValue);
   }
@@ -823,12 +858,12 @@
     fields: {
       behaviorType: {
         type: 'select',
-        options: [
-          'Remove',
-          'Fade',
-          'Custom',
-        ],
+        options: BEHAVIORS,
         default: 'Fade',
+      },
+      behaviorBlurAmount: {
+        type: 'int',
+        default: 3,
       },
       behaviorCustomValue: {
         type: 'text',

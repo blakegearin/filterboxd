@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filterboxd
 // @namespace    https://github.com/blakegearin/filterboxd
-// @version      0.2.0
+// @version      0.3.0
 // @description  Filter titles on Letterboxd
 // @author       Blake Gearin
 // @match        https://letterboxd.com/*
@@ -45,50 +45,6 @@
 
   log(TRACE, 'Starting');
 
-  function gmcInitialized() {
-    log(DEBUG, 'gmcInitialized()');
-
-    updateLogLevel();
-
-    log(QUIET, 'Running');
-
-    GMC.css.basic = '';
-
-    if (RESET) {
-      log(QUIET, 'Resetting GMC');
-      GMC.set('hiddenTitles', JSON.stringify([]));
-      GMC.reset();
-      GMC.save();
-    }
-
-    let userscriptStyle = document.createElement('style');
-    userscriptStyle.setAttribute('id', 'filterboxd-style');
-    userscriptStyle.textContent += `
-      .${SELECTORS.hiddenTitleClass}
-      {
-        ${GMC.get('hideStyle')}
-      }
-
-      .${SELECTORS.settings.hiddenTitleSpanClass}
-      {
-        cursor: pointer;
-        margin-right: 0.3rem !important;
-      }
-
-      .${SELECTORS.settings.hiddenTitleSpanClass}:hover
-      {
-        background: #303840;
-        color: #def;
-      }
-    `;
-    document.body.appendChild(userscriptStyle);
-
-    applyFilters();
-    maybeAddConfigurationToSettings();
-
-    startObserving();
-  }
-
   function updateLogLevel() {
     CURRENT_LOG_LEVEL = {
       silent: SILENT,
@@ -114,10 +70,9 @@
 
   function modifyThenObserve(callback) {
     log(DEBUG, 'modifyThenObserve()');
+
     OBSERVER.disconnect();
-
     callback();
-
     startObserving();
   }
 
@@ -154,7 +109,7 @@
     }
   }
 
-  const MAX_IDLE_MUTATIONS = 1000;
+  const MAX_IDLE_MUTATIONS = 100;
   const MAX_HEADER_UPDATES = 100;
 
   let IDLE_MUTATION_COUNT = 0;
@@ -166,7 +121,7 @@
       addToWatchlist: '.film-poster-popmenu .add-to-watchlist',
       addThisFilm: '.film-poster-popmenu .menu-item-add-this-film',
     },
-    hiddenTitleClass: 'hidden-title',
+    filterTitleClass: 'filter-title',
     processedClass: {
       hide: 'hide-processed',
       unhide: 'unhide-processed',
@@ -174,78 +129,32 @@
     settings: {
       clear: '.clear',
       favoriteFilms: '.favourite-films-selector',
-      hiddenTitleSpanClass: 'hidden-title-span',
+      filteredTitleLinkClass: 'filtered-title-span',
       note: '.note',
       posterList: '.poster-list',
+      savedBadgeClass: 'filtered-saved',
       subtitle: '.mob-subtitle',
     },
   };
 
-  function maybeAddConfigurationToSettings() {
-    log(DEBUG, 'maybeAddConfigurationToSettings()');
+  function addFilterTitleClass(element, levelsUp = 0) {
+    log(DEBUG, 'addFilterTitleClass()');
 
-    const configurationId = 'filterboxd-configuration';
-    const configurationExists = document.querySelector(configurationId);
-    log(VERBOSE, 'configurationExists', configurationExists);
+    let target = element;
 
-    const onSettingsPage = window.location.href.includes('/settings/');
-    log(VERBOSE, 'onSettingsPage', onSettingsPage);
-
-    if (!onSettingsPage || configurationExists) {
-      log(DEBUG, 'Not on settings page or configuration is present');
-
-      return;
+    for (let i = 0; i < levelsUp; i++) {
+      if (target.parentNode) {
+        target = target.parentNode;
+      } else {
+        break;
+      }
     }
 
-    log(DEBUG, 'On settings page and configuration not present');
+    log(VERBOSE, 'target', target);
 
-    const favoriteFilmsDiv = document.querySelector(SELECTORS.settings.favoriteFilms);
-    const userscriptConfigurationDiv = favoriteFilmsDiv.cloneNode(true);
-
-    userscriptConfigurationDiv.setAttribute('id', configurationId);
-    const posterList = userscriptConfigurationDiv.querySelector(SELECTORS.settings.posterList);
-    posterList.remove();
-
-    userscriptConfigurationDiv.setAttribute('style', 'margin-top: 4rem;');
-    userscriptConfigurationDiv.querySelector(SELECTORS.settings.subtitle).innerText = 'Filtered Films';
-    userscriptConfigurationDiv.querySelector(SELECTORS.settings.note).innerText = 'Click titles to remove.';
-
-    const hiddenTitlesParagraph = document.createElement('p');
-    let hiddenTitlesDiv = document.createElement('div');
-    hiddenTitlesDiv.classList.add('text-sluglist');
-
-    const hiddenTitles = getHiddenTitles();
-    log(VERBOSE, 'hiddenTitles', hiddenTitles);
-
-    hiddenTitles.forEach(hiddenTitle => {
-      log(VERBOSE, 'hiddenTitle', hiddenTitle);
-
-      let hiddenTitleSpan = document.createElement('span');
-
-      hiddenTitleSpan.classList.add(
-        'text-slug',
-        SELECTORS.processedClass.hide,
-        SELECTORS.settings.hiddenTitleSpanClass,
-      );
-      hiddenTitleSpan.setAttribute('data-film-id', hiddenTitle.id);
-      hiddenTitleSpan.innerText = `${hiddenTitle.name} (${hiddenTitle.year})`;
-
-      hiddenTitleSpan.onclick = () => {
-        unhideTitle(hiddenTitle);
-        removeFromHiddenTitles(hiddenTitle);
-        hiddenTitleSpan.remove();
-      };
-
-      hiddenTitlesParagraph.appendChild(hiddenTitleSpan);
+    modifyThenObserve(() => {
+      target.classList.add(SELECTORS.filterTitleClass);
     });
-
-    hiddenTitlesDiv.appendChild(hiddenTitlesParagraph);
-
-    const clearDiv = userscriptConfigurationDiv.querySelector(SELECTORS.settings.clear);
-    clearDiv.remove();
-
-    userscriptConfigurationDiv.append(hiddenTitlesDiv);
-    favoriteFilmsDiv.parentNode.insertBefore(userscriptConfigurationDiv, favoriteFilmsDiv.nextSibling);
   }
 
   function addListItemToPopMenu() {
@@ -294,10 +203,10 @@
 
           const titleIsHidden = link.getAttribute('data-title-hidden') === 'true';
           if (titleIsHidden) {
-            unhideTitle(titleMetadata);
-            removeFromHiddenTitles(titleMetadata);
+            removeTitle(titleMetadata);
+            removeFromFilterTitles(titleMetadata);
           } else {
-            hideTitle(titleMetadata);
+            addTitle(titleMetadata);
             addToHiddenTitles(titleMetadata);
           }
 
@@ -324,7 +233,7 @@
         const titleYear = addThisFilmLink.getAttribute('data-film-release-year');
         userscriptLink.setAttribute('data-film-release-year', titleYear);
 
-        const titleIsHidden = getHiddenTitles().some(hiddenTitle => hiddenTitle.id === titleId);
+        const titleIsHidden = getFilteredTitles().some(hiddenTitle => hiddenTitle.id === titleId);
         updateLinkInPopMenu(titleIsHidden, userscriptLink);
 
         userscriptLink.removeAttribute('class');
@@ -336,74 +245,30 @@
     return;
   }
 
-  function addToHiddenTitles(titleMetadata) {
-    log(DEBUG, 'addToHiddenTitles()');
-
-    const hiddenTitles = getHiddenTitles();
-    hiddenTitles.push(titleMetadata);
-    log(VERBOSE, 'hiddenTitles', hiddenTitles);
-
-    GMC.set('hiddenTitles', JSON.stringify(hiddenTitles));
-    GMC.save();
-  }
-
-  function applyFilters() {
-    log(DEBUG, 'applyFilters()');
-
-    const hiddenTitles = getHiddenTitles();
-    log(VERBOSE, 'hiddenTitles', hiddenTitles);
-
-    hiddenTitles.forEach(titleMetadata => hideTitle(titleMetadata));
-  }
-
-  function getHiddenTitles() {
-    return JSON.parse(GMC.get('hiddenTitles'));
-  }
-
-  function hideElement(element, levelsUp = 0) {
-    log(DEBUG, 'hideElement()');
-
-    let target = element;
-
-    for (let i = 0; i < levelsUp; i++) {
-      if (target.parentNode) {
-        target = target.parentNode;
-      } else {
-        break;
-      }
-    }
-
-    log(VERBOSE, 'target', target);
-
-    modifyThenObserve(() => {
-      target.classList.add(SELECTORS.hiddenTitleClass);
-    });
-  }
-
-  function hideTitle({ id, slug }) {
-    log(DEBUG, 'hideTitle()');
+  function addTitle({ id, slug }) {
+    log(DEBUG, 'addTitle()');
 
     // Activity page reviews
     document.querySelectorAll(`section.activity-row [data-film-id="${id}"]`).forEach(posterElement => {
-      hideElement(posterElement, 3);
+      addFilterTitleClass(posterElement, 3);
       posterElement.classList.add(SELECTORS.processedClass.hide);
     });
 
     // Activity page likes
     document.querySelectorAll(`section.activity-row .activity-summary a[href*="${slug}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
-      hideElement(posterElement, 3);
+      addFilterTitleClass(posterElement, 3);
       posterElement.classList.add(SELECTORS.processedClass.hide);
     });
 
     // New from friends
     document.querySelectorAll(`.poster-container [data-film-id="${id}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
-      hideElement(posterElement, 1);
+      addFilterTitleClass(posterElement, 1);
       posterElement.classList.add(SELECTORS.processedClass.hide);
     });
 
     // Reviews
     document.querySelectorAll(`.review-tile [data-film-id="${id}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
-      hideElement(posterElement, 3);
+      addFilterTitleClass(posterElement, 3);
       posterElement.classList.add(SELECTORS.processedClass.hide);
     });
 
@@ -414,20 +279,278 @@
       `div:not(.popmenu):not(.actions-panel) [data-film-id="${id}"]:not(aside [data-film-id="${id}"]):not(.${SELECTORS.processedClass.hide})`,
     );
     remainingElements.forEach(posterElement => {
-      hideElement(posterElement, 0);
+      addFilterTitleClass(posterElement, 0);
     });
   }
 
-  function removeFromHiddenTitles(titleMetadata) {
-    let hiddenTitles = getHiddenTitles();
-    hiddenTitles = hiddenTitles.filter(hiddenTitle => hiddenTitle.id !== titleMetadata.id);
+  function addToHiddenTitles(titleMetadata) {
+    log(DEBUG, 'addToHiddenTitles()');
 
-    GMC.set('hiddenTitles', JSON.stringify(hiddenTitles));
+    const filteredTitles = getFilteredTitles();
+    filteredTitles.push(titleMetadata);
+    log(VERBOSE, 'filteredTitles', filteredTitles);
+
+    GMC.set('filteredTitles', JSON.stringify(filteredTitles));
     GMC.save();
   }
 
-  function unhideElement(element, levelsUp = 0) {
-    log(DEBUG, 'unhideElement()');
+  function applyFilters() {
+    log(DEBUG, 'applyFilters()');
+
+    const filteredTitles = getFilteredTitles();
+    log(VERBOSE, 'filteredTitles', filteredTitles);
+
+    filteredTitles.forEach(titleMetadata => addTitle(titleMetadata));
+  }
+
+  function displaySavedBadge() {
+    const savedBadge = document.querySelector(`.${SELECTORS.settings.savedBadgeClass}`);
+
+    savedBadge.classList.remove('hidden');
+    savedBadge.classList.add('fade');
+
+    setTimeout(() => {
+      savedBadge.classList.add('fade-out');
+    }, 2000);
+
+    setTimeout(() => {
+      savedBadge.classList.remove('fade', 'fade-out');
+      savedBadge.classList.add('hidden');
+    }, 3000);
+  }
+
+  function getFilteredTitles() {
+    return JSON.parse(GMC.get('filteredTitles'));
+  }
+
+  function gmcInitialized() {
+    log(DEBUG, 'gmcInitialized()');
+
+    updateLogLevel();
+
+    log(QUIET, 'Running');
+
+    GMC.css.basic = '';
+
+    if (RESET) {
+      log(QUIET, 'Resetting GMC');
+      GMC.set('filteredTitles', JSON.stringify([]));
+      GMC.reset();
+      GMC.save();
+    }
+
+    let userscriptStyle = document.createElement('style');
+    userscriptStyle.setAttribute('id', 'filterboxd-style');
+
+    let behaviorStyle;
+    let behaviorType = GMC.get('behaviorType');
+
+    const behaviorFadeValue = GMC.get('behaviorFadeValue');
+    log(VERBOSE, 'behaviorFadeValue', behaviorFadeValue);
+
+    switch (behaviorType) {
+      case 'Remove':
+        behaviorStyle = 'display: none !important;';
+        break;
+      case 'Fade':
+        behaviorStyle = `opacity: ${behaviorFadeValue}%`;
+        break;
+      case 'Custom':
+        behaviorStyle = '';
+        break;
+    }
+
+    log(VERBOSE, 'behaviorStyle', behaviorStyle);
+
+    userscriptStyle.textContent += `
+      .${SELECTORS.filterTitleClass}
+      {
+        ${behaviorStyle}
+      }
+
+      .${SELECTORS.settings.filteredTitleLinkClass}
+      {
+        cursor: pointer;
+        margin-right: 0.3rem !important;
+      }
+
+      .${SELECTORS.settings.filteredTitleLinkClass}:hover
+      {
+        background: #303840;
+        color: #def;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .fade {
+        opacity: 1;
+        transition: opacity 1s ease-out;
+      }
+
+      .fade.fade-out {
+        opacity: 0;
+      }
+    `;
+    document.body.appendChild(userscriptStyle);
+
+    applyFilters();
+    maybeAddConfigurationToSettings();
+
+    startObserving();
+  }
+
+  function maybeAddConfigurationToSettings() {
+    log(DEBUG, 'maybeAddConfigurationToSettings()');
+
+    const configurationId = 'filterboxd-configuration';
+    const configurationExists = document.querySelector(configurationId);
+    log(VERBOSE, 'configurationExists', configurationExists);
+
+    const onSettingsPage = window.location.href.includes('/settings/');
+    log(VERBOSE, 'onSettingsPage', onSettingsPage);
+
+    if (!onSettingsPage || configurationExists) {
+      log(DEBUG, 'Not on settings page or configuration is present');
+
+      return;
+    }
+
+    log(DEBUG, 'On settings page and configuration not present');
+
+    const favoriteFilmsDiv = document.querySelector(SELECTORS.settings.favoriteFilms);
+    const userscriptConfigurationDiv = favoriteFilmsDiv.cloneNode(true);
+
+    userscriptConfigurationDiv.setAttribute('id', configurationId);
+    const posterList = userscriptConfigurationDiv.querySelector(SELECTORS.settings.posterList);
+    posterList.remove();
+
+    userscriptConfigurationDiv.setAttribute('style', 'margin-top: 4rem;');
+    userscriptConfigurationDiv.querySelector(SELECTORS.settings.subtitle).innerText = 'Filtered Films';
+    userscriptConfigurationDiv.querySelector(SELECTORS.settings.note).innerText = 'Click to open or right click to remove.';
+
+    const hiddenTitlesParagraph = document.createElement('p');
+    let hiddenTitlesDiv = document.createElement('div');
+    hiddenTitlesDiv.classList.add('text-sluglist');
+
+    const filteredTitles = getFilteredTitles();
+    log(VERBOSE, 'filteredTitles', filteredTitles);
+
+    filteredTitles.forEach(hiddenTitle => {
+      log(VERBOSE, 'hiddenTitle', hiddenTitle);
+
+      let filteredTitleLink = document.createElement('a');
+      filteredTitleLink.href= `/film/${hiddenTitle.slug}`;
+
+      filteredTitleLink.classList.add(
+        'text-slug',
+        SELECTORS.processedClass.hide,
+        SELECTORS.settings.filteredTitleLinkClass,
+      );
+      filteredTitleLink.setAttribute('data-film-id', hiddenTitle.id);
+      filteredTitleLink.innerText = `${hiddenTitle.name} (${hiddenTitle.year})`;
+
+      filteredTitleLink.oncontextmenu = (event) => {
+        event.preventDefault();
+
+        removeTitle(hiddenTitle);
+        removeFromFilterTitles(hiddenTitle);
+        filteredTitleLink.remove();
+      };
+
+      hiddenTitlesParagraph.appendChild(filteredTitleLink);
+    });
+
+    hiddenTitlesDiv.appendChild(hiddenTitlesParagraph);
+    userscriptConfigurationDiv.append(hiddenTitlesDiv);
+
+    let behaviorDiv = document.createElement('div');
+    behaviorDiv.classList.add('form-row');
+
+    let checkContainerDiv = document.createElement('div');
+    checkContainerDiv.classList.add('check-container');
+
+    let usernameAvailableParagraph = document.createElement('p');
+    usernameAvailableParagraph.classList.add(
+      'username-available',
+      'has-icon',
+      'hidden',
+      SELECTORS.settings.savedBadgeClass,
+    );
+
+    let iconSpan = document.createElement('span');
+    iconSpan.classList.add('icon');
+
+    const savedText = document.createTextNode('Saved');
+
+    usernameAvailableParagraph.appendChild(iconSpan);
+    usernameAvailableParagraph.appendChild(savedText);
+
+    checkContainerDiv.appendChild(usernameAvailableParagraph);
+
+    let selectListDiv = document.createElement('div');
+    selectListDiv.classList.add('select-list');
+
+    let behaviorLabel = document.createElement('label');
+    behaviorLabel.classList.add('label');
+    behaviorLabel.innerText = 'Behavior';
+
+    let behaviorInputDiv = document.createElement('div');
+    behaviorInputDiv.classList.add('input');
+
+    let behaviorSelect = document.createElement('select');
+    behaviorSelect.classList.add('select');
+    behaviorSelect.onchange = (event) => {
+      console.log('event');
+      console.dir(event, { depth: null });
+
+      console.log('event.target');
+      console.dir(event.target, { depth: null });
+
+      console.log('event.target.value');
+      console.dir(event.target.value, { depth: null });
+
+      GMC.set('behaviorType', event.target.value);
+      GMC.save();
+
+      displaySavedBadge();
+    };
+
+    const behaviorValue = GMC.get('behaviorType');
+    log(SILENT, 'behaviorValue', behaviorValue);
+
+    const behaviorOptions = [
+      'Remove',
+      'Fade',
+      'Custom',
+    ];
+
+    behaviorOptions.forEach(optionName => {
+      let option = document.createElement('option');
+      option.setAttribute('value', optionName);
+      option.innerText = optionName;
+
+      if (optionName === behaviorValue) option.setAttribute('selected', 'selected');
+
+      behaviorSelect.appendChild(option);
+    });
+
+    behaviorInputDiv.appendChild(behaviorSelect);
+    selectListDiv.appendChild(behaviorLabel);
+    selectListDiv.appendChild(behaviorInputDiv);
+    behaviorDiv.appendChild(checkContainerDiv);
+    behaviorDiv.appendChild(selectListDiv);
+    userscriptConfigurationDiv.appendChild(behaviorDiv);
+
+    const clearDiv = userscriptConfigurationDiv.querySelector(SELECTORS.settings.clear);
+    clearDiv.remove();
+
+    favoriteFilmsDiv.parentNode.insertBefore(userscriptConfigurationDiv, favoriteFilmsDiv.nextSibling);
+  }
+
+  function removeFilterTitleClass(element, levelsUp = 0) {
+    log(DEBUG, 'removeFilterTitleClass()');
 
     let target = element;
 
@@ -440,40 +563,48 @@
     }
 
     modifyThenObserve(() => {
-      target.classList.remove(SELECTORS.hiddenTitleClass);
+      target.classList.remove(SELECTORS.filterTitleClass);
     });
   }
 
-  function unhideTitle({ id, slug }) {
-    log(DEBUG, 'unhideTitle()');
+  function removeFromFilterTitles(titleMetadata) {
+    let filteredTitles = getFilteredTitles();
+    filteredTitles = filteredTitles.filter(hiddenTitle => hiddenTitle.id !== titleMetadata.id);
+
+    GMC.set('filteredTitles', JSON.stringify(filteredTitles));
+    GMC.save();
+  }
+
+  function removeTitle({ id, slug }) {
+    log(DEBUG, 'removeTitle()');
 
     // Activity page reviews
     document.querySelectorAll(`section.activity-row [data-film-id="${id}"]`).forEach(posterElement => {
-      unhideElement(posterElement, 3);
+      removeFilterTitleClass(posterElement, 3);
       posterElement.classList.add(SELECTORS.processedClass.unhide);
     });
 
     // Activity page likes
     document.querySelectorAll(`section.activity-row .activity-summary a[href*="${slug}"]:not(.${SELECTORS.processedClass.unhide})`).forEach(posterElement => {
-      unhideElement(posterElement, 3);
+      removeFilterTitleClass(posterElement, 3);
       posterElement.classList.add(SELECTORS.processedClass.unhide);
     });
 
     // New from friends
     document.querySelectorAll(`.poster-container [data-film-id="${id}"]:not(.${SELECTORS.processedClass.unhide})`).forEach(posterElement => {
-      unhideElement(posterElement, 1);
+      removeFilterTitleClass(posterElement, 1);
       posterElement.classList.add(SELECTORS.processedClass.unhide);
     });
 
     // Reviews
     document.querySelectorAll(`.review-tile [data-film-id="${id}"]:not(.${SELECTORS.processedClass.unhide})`).forEach(posterElement => {
-      unhideElement(posterElement, 3);
+      removeFilterTitleClass(posterElement, 3);
       posterElement.classList.add(SELECTORS.processedClass.unhide);
     });
 
     // Popular with friends, competitions
     document.querySelectorAll(`div:not(.popmenu) [data-film-id="${id}"]:not(.${SELECTORS.processedClass.unhide})`).forEach(posterElement => {
-      unhideElement(posterElement, 0);
+      removeFilterTitleClass(posterElement, 0);
     });
   }
 
@@ -494,16 +625,24 @@
       init: gmcInitialized,
     },
     fields: {
-      hiddenTitles: {
+      behaviorType: {
+        type: 'select',
+        options: [
+          'Remove',
+          'Fade',
+          'Custom',
+        ],
+        default: 'Fade',
+      },
+      behaviorFadeValue: {
+        type: 'int',
+        default: 10,
+      },
+      filteredTitles: {
         type: 'text',
         default: JSON.stringify([]),
       },
-      hideStyle: {
-        type: 'text',
-        default: 'opacity: 0.05;',
-      },
       logLevel: {
-        label: 'Log level',
         type: 'select',
         options: [
           'silent',

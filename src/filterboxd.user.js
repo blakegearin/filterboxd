@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filterboxd
 // @namespace    https://github.com/blakegearin/filterboxd
-// @version      0.7.0
+// @version      0.8.0
 // @description  Filter titles on Letterboxd
 // @author       Blake Gearin
 // @match        https://letterboxd.com/*
@@ -130,7 +130,13 @@
 
   const MAX_IDLE_MUTATIONS = 100;
   const MAX_HEADER_UPDATES = 100;
-  const BEHAVIORS = [ 'Remove', 'Fade', 'Blur', 'Custom' ];
+  const BEHAVIORS = [
+    'Remove',
+    'Fade',
+    'Blur',
+    'Replace poster',
+    'Custom',
+  ];
 
   let IDLE_MUTATION_COUNT = 0;
   let UPDATES_COUNT = 0;
@@ -141,10 +147,10 @@
       addToList: '.film-poster-popmenu .menu-item-add-to-list',
       addThisFilm: '.film-poster-popmenu .menu-item-add-this-film',
     },
-    filterTitleClass: 'filter-title',
+    filterTitleClass: 'filterboxd-filter-title',
     processedClass: {
-      hide: 'hide-processed',
-      unhide: 'unhide-processed',
+      apply: 'filterboxd-hide-processed',
+      remove: 'filterboxd-unhide-processed',
     },
     settings: {
       clear: '.clear',
@@ -161,26 +167,6 @@
       addThisFilm: '#userpanel .add-this-film',
     },
   };
-
-  function addFilterTitleClass(element, levelsUp = 0) {
-    log(DEBUG, 'addFilterTitleClass()');
-
-    let target = element;
-
-    for (let i = 0; i < levelsUp; i++) {
-      if (target.parentNode) {
-        target = target.parentNode;
-      } else {
-        break;
-      }
-    }
-
-    log(VERBOSE, 'target', target);
-
-    modifyThenObserve(() => {
-      target.classList.add(SELECTORS.filterTitleClass);
-    });
-  }
 
   function addListItemToPopMenu() {
     log(DEBUG, 'addListItemToPopMenu()');
@@ -231,42 +217,45 @@
   function addTitle({ id, slug }) {
     log(DEBUG, 'addTitle()');
 
+    const idMatch = `[data-film-id="${id}"]`;
+    let appliedSelector = `.${SELECTORS.processedClass.apply}`;
+
+    const replaceBehavior = GMC.get('behaviorType') === 'Replace poster';
+    log(VERBOSE, 'replaceBehavior', replaceBehavior);
+
+    if (replaceBehavior) appliedSelector = '[data-original-img-src]';
+
     // Activity page reviews
-    document.querySelectorAll(`section.activity-row [data-film-id="${id}"]`).forEach(posterElement => {
-      addFilterTitleClass(posterElement, 3);
-      posterElement.classList.add(SELECTORS.processedClass.hide);
+    document.querySelectorAll(`section.activity-row ${idMatch}`).forEach(posterElement => {
+      applyFilterToElement(posterElement, 3);
     });
 
     // Activity page likes
-    document.querySelectorAll(`section.activity-row .activity-summary a[href*="${slug}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
-      addFilterTitleClass(posterElement, 3);
-      posterElement.classList.add(SELECTORS.processedClass.hide);
+    document.querySelectorAll(`section.activity-row .activity-summary a[href*="${slug}"]:not(${appliedSelector})`).forEach(posterElement => {
+      applyFilterToElement(posterElement, 3);
     });
 
     // New from friends
-    document.querySelectorAll(`.poster-container [data-film-id="${id}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
-      addFilterTitleClass(posterElement, 1);
-      posterElement.classList.add(SELECTORS.processedClass.hide);
+    document.querySelectorAll(`.poster-container ${idMatch}:not(${appliedSelector})`).forEach(posterElement => {
+      applyFilterToElement(posterElement, 1);
     });
 
     // Reviews
-    document.querySelectorAll(`.review-tile [data-film-id="${id}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
-      addFilterTitleClass(posterElement, 3);
-      posterElement.classList.add(SELECTORS.processedClass.hide);
+    document.querySelectorAll(`.review-tile ${idMatch}:not(${appliedSelector})`).forEach(posterElement => {
+      applyFilterToElement(posterElement, 3);
     });
 
     // Diary
-    document.querySelectorAll(`.td-film-details [data-film-id="${id}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
-      addFilterTitleClass(posterElement, 2);
-      posterElement.classList.add(SELECTORS.processedClass.hide);
+    document.querySelectorAll(`.td-film-details [data-original-img-src]${idMatch}:not(${appliedSelector})`).forEach(posterElement => {
+      applyFilterToElement(posterElement, 2);
     });
 
     // Popular with friends, competitions
     const remainingElements = document.querySelectorAll(
-      `div:not(.popmenu):not(.actions-panel) [data-film-id="${id}"]:not(aside [data-film-id="${id}"]):not(.${SELECTORS.processedClass.hide})`,
+      `div:not(.popmenu):not(.actions-panel) ${idMatch}:not(aside [data-film-id="${id}"]):not(${appliedSelector})`,
     );
     remainingElements.forEach(posterElement => {
-      addFilterTitleClass(posterElement, 0);
+      applyFilterToElement(posterElement, 0);
     });
   }
 
@@ -287,7 +276,51 @@
     const filteredTitles = getFilteredTitles();
     log(VERBOSE, 'filteredTitles', filteredTitles);
 
-    filteredTitles.forEach(titleMetadata => addTitle(titleMetadata));
+    modifyThenObserve(() => {
+      filteredTitles.forEach(titleMetadata => addTitle(titleMetadata));
+    });
+  }
+
+  function applyFilterToElement(element, levelsUp = 0) {
+    log(DEBUG, 'applyFilterToElement()');
+
+    const replaceBehavior = GMC.get('behaviorType') === 'Replace poster';
+    log(VERBOSE, 'replaceBehavior', replaceBehavior);
+
+    if (replaceBehavior) {
+      const behaviorReplaceValue = GMC.get('behaviorReplaceValue');
+      log(VERBOSE, 'behaviorReplaceValue', behaviorReplaceValue);
+
+      const elementImg = element.querySelector('img');
+      if (!elementImg) return;
+
+      const originalImgSrc = elementImg.src;
+      if (!originalImgSrc) return;
+
+      if (originalImgSrc === behaviorReplaceValue) return;
+
+      element.setAttribute('data-original-img-src', originalImgSrc);
+
+      element.querySelector('img').src = behaviorReplaceValue;
+      element.querySelector('img').srcset = behaviorReplaceValue;
+
+      element.classList.add(SELECTORS.processedClass.apply);
+    } else {
+      let target = element;
+
+      for (let i = 0; i < levelsUp; i++) {
+        if (target.parentNode) {
+          target = target.parentNode;
+        } else {
+          break;
+        }
+      }
+
+      log(VERBOSE, 'target', target);
+
+      target.classList.add(SELECTORS.filterTitleClass);
+      element.classList.add(SELECTORS.processedClass.apply);
+    }
   }
 
   function buildUserscriptLink(userscriptListItem, addToListLink, addThisFilmLink) {
@@ -311,15 +344,18 @@
       };
 
       const titleIsHidden = link.getAttribute('data-title-hidden') === 'true';
-      if (titleIsHidden) {
-        removeTitle(titleMetadata);
-        removeFromFilterTitles(titleMetadata);
-      } else {
-        addTitle(titleMetadata);
-        addToHiddenTitles(titleMetadata);
-      }
 
-      updateLinkInPopMenu(!titleIsHidden, link);
+      modifyThenObserve(() => {
+        if (titleIsHidden) {
+          removeTitle(titleMetadata);
+          removeFromFilterTitles(titleMetadata);
+        } else {
+          addTitle(titleMetadata);
+          addToHiddenTitles(titleMetadata);
+        }
+
+        updateLinkInPopMenu(!titleIsHidden, link);
+      });
     };
 
     const titleId = parseInt(addToListLink.getAttribute('data-film-id'));
@@ -568,7 +604,7 @@
 
       filteredTitleLink.classList.add(
         'text-slug',
-        SELECTORS.processedClass.hide,
+        SELECTORS.processedClass.apply,
         SELECTORS.settings.filteredTitleLinkClass,
       );
       filteredTitleLink.setAttribute('data-film-id', hiddenTitle.id);
@@ -647,6 +683,19 @@
 
     formColumnsDiv.appendChild(blurAmountFormRow);
 
+    // Replace URL
+    const behaviorReplaceValue = GMC.get('behaviorReplaceValue');
+    log(DEBUG, 'behaviorReplaceValue', behaviorReplaceValue);
+
+    const replaceUrlFormRow = createFormRow({
+      formRowStyle: 'width: 68.8%; float: right; display: var(--filterboxd-behavior-replace);',
+      labelText: 'URL',
+      inputValue: behaviorReplaceValue,
+      inputType: 'text',
+    });
+
+    formColumnsDiv.appendChild(replaceUrlFormRow);
+
     // Custom CSS
     const behaviorCustomValue = GMC.get('behaviorCustomValue');
     log(DEBUG, 'behaviorCustomValue', behaviorCustomValue);
@@ -695,8 +744,13 @@
 
         GMC.set('behaviorBlurAmount', behaviorBlurAmount);
         GMC.save();
-      }
-      else if (behaviorType === 'Custom') {
+      } else if (behaviorType === 'Replace poster') {
+        const behaviorReplaceValue = replaceUrlFormRow.querySelector('input').value;
+        log(DEBUG, 'behaviorReplaceValue', behaviorReplaceValue);
+
+        GMC.set('behaviorReplaceValue', behaviorReplaceValue);
+        GMC.save();
+      } else if (behaviorType === 'Custom') {
         const behaviorCustomValue = cssFormRow.querySelector('input').value;
         log(DEBUG, 'behaviorCustomValue', behaviorCustomValue);
 
@@ -767,22 +821,37 @@
     secondLastListItem.parentNode.insertBefore(userscriptListItem, userpanel.querySelector('li:nth-last-of-type(1)'));
   }
 
-  function removeFilterTitleClass(element, levelsUp = 0) {
-    log(DEBUG, 'removeFilterTitleClass()');
+  function removeFilterFromElement(element, levelsUp = 0) {
+    log(DEBUG, 'removeFilterFromElement()');
 
-    let target = element;
+    const replaceBehavior = GMC.get('behaviorType') === 'Replace poster';
+    log(VERBOSE, 'replaceBehavior', replaceBehavior);
 
-    for (let i = 0; i < levelsUp; i++) {
-      if (target.parentNode) {
-        target = target.parentNode;
-      } else {
-        break;
+    if (replaceBehavior) {
+      const originalImgSrc = element.getAttribute('data-original-img-src');
+      if (!originalImgSrc) return;
+
+      element.querySelector('img').src = originalImgSrc;
+      element.querySelector('img').srcset = originalImgSrc;
+
+      element.removeAttribute('data-original-img-src');
+      element.classList.add(SELECTORS.processedClass.remove);
+    } else {
+      let target = element;
+
+      for (let i = 0; i < levelsUp; i++) {
+        if (target.parentNode) {
+          target = target.parentNode;
+        } else {
+          break;
+        }
       }
-    }
 
-    modifyThenObserve(() => {
+      log(VERBOSE, 'target', target);
+
       target.classList.remove(SELECTORS.filterTitleClass);
-    });
+      element.classList.add(SELECTORS.processedClass.remove);
+    }
   }
 
   function removeFromFilterTitles(titleMetadata) {
@@ -796,33 +865,41 @@
   function removeTitle({ id, slug }) {
     log(DEBUG, 'removeTitle()');
 
+    const idMatch = `[data-film-id="${id}"]`;
+    let removedSelector = `.${SELECTORS.processedClass.remove}`;
+
     // Activity page reviews
-    document.querySelectorAll(`section.activity-row [data-film-id="${id}"]`).forEach(posterElement => {
-      removeFilterTitleClass(posterElement, 3);
-      posterElement.classList.add(SELECTORS.processedClass.unhide);
+    document.querySelectorAll(`section.activity-row ${idMatch}`).forEach(posterElement => {
+      removeFilterFromElement(posterElement, 3);
     });
 
     // Activity page likes
-    document.querySelectorAll(`section.activity-row .activity-summary a[href*="${slug}"]:not(.${SELECTORS.processedClass.unhide})`).forEach(posterElement => {
-      removeFilterTitleClass(posterElement, 3);
-      posterElement.classList.add(SELECTORS.processedClass.unhide);
+    document.querySelectorAll(`section.activity-row .activity-summary a[href*="${slug}"]:not(${removedSelector})`).forEach(posterElement => {
+      removeFilterFromElement(posterElement, 3);
     });
 
+    // debugger;
     // New from friends
-    document.querySelectorAll(`.poster-container [data-film-id="${id}"]:not(.${SELECTORS.processedClass.unhide})`).forEach(posterElement => {
-      removeFilterTitleClass(posterElement, 1);
-      posterElement.classList.add(SELECTORS.processedClass.unhide);
+    document.querySelectorAll(`.poster-container ${idMatch}:not(${removedSelector})`).forEach(posterElement => {
+      removeFilterFromElement(posterElement, 1);
     });
 
     // Reviews
-    document.querySelectorAll(`.review-tile [data-film-id="${id}"]:not(.${SELECTORS.processedClass.unhide})`).forEach(posterElement => {
-      removeFilterTitleClass(posterElement, 3);
-      posterElement.classList.add(SELECTORS.processedClass.unhide);
+    document.querySelectorAll(`.review-tile ${idMatch}:not(${removedSelector})`).forEach(posterElement => {
+      removeFilterFromElement(posterElement, 3);
+    });
+
+    // Diary
+    document.querySelectorAll(`.td-film-details [data-original-img-src]${idMatch}:not(${removedSelector})`).forEach(posterElement => {
+      removeFilterFromElement(posterElement, 2);
     });
 
     // Popular with friends, competitions
-    document.querySelectorAll(`div:not(.popmenu) [data-film-id="${id}"]:not(.${SELECTORS.processedClass.unhide})`).forEach(posterElement => {
-      removeFilterTitleClass(posterElement, 0);
+    const remainingElements = document.querySelectorAll(
+      `div:not(.popmenu):not(.actions-panel) ${idMatch}:not(aside [data-film-id="${id}"]):not(${removedSelector})`,
+    );
+    remainingElements.forEach(posterElement => {
+      removeFilterFromElement(posterElement, 0);
     });
   }
 
@@ -834,6 +911,9 @@
 
     const blurValue = behaviorType === 'Blur' ? 'block' : 'none';
     document.documentElement.style.setProperty('--filterboxd-behavior-blur', blurValue);
+
+    const replaceValue = behaviorType === 'Replace poster' ? 'block' : 'none';
+    document.documentElement.style.setProperty('--filterboxd-behavior-replace', replaceValue);
 
     const customValue = behaviorType === 'Custom' ? 'block' : 'none';
     document.documentElement.style.setProperty('--filterboxd-behavior-custom', customValue);
@@ -872,6 +952,10 @@
       behaviorFadeAmount: {
         type: 'int',
         default: 10,
+      },
+      behaviorReplaceValue: {
+        type: 'text',
+        default: 'https://a.ltrbxd.com/resized/film-poster/4/8/7/9/1/48791-bee-movie-0-230-0-345-crop.jpg?v=2b9ece5cba',
       },
       filteredTitles: {
         type: 'text',

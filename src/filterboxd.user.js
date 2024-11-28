@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filterboxd
 // @namespace    https://github.com/blakegearin/filterboxd
-// @version      0.5.0
+// @version      0.6.0
 // @description  Filter titles on Letterboxd
 // @author       Blake Gearin
 // @match        https://letterboxd.com/*
@@ -227,6 +227,68 @@
     return;
   }
 
+  function addTitle({ id, slug }) {
+    log(DEBUG, 'addTitle()');
+
+    // Activity page reviews
+    document.querySelectorAll(`section.activity-row [data-film-id="${id}"]`).forEach(posterElement => {
+      addFilterTitleClass(posterElement, 3);
+      posterElement.classList.add(SELECTORS.processedClass.hide);
+    });
+
+    // Activity page likes
+    document.querySelectorAll(`section.activity-row .activity-summary a[href*="${slug}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
+      addFilterTitleClass(posterElement, 3);
+      posterElement.classList.add(SELECTORS.processedClass.hide);
+    });
+
+    // New from friends
+    document.querySelectorAll(`.poster-container [data-film-id="${id}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
+      addFilterTitleClass(posterElement, 1);
+      posterElement.classList.add(SELECTORS.processedClass.hide);
+    });
+
+    // Reviews
+    document.querySelectorAll(`.review-tile [data-film-id="${id}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
+      addFilterTitleClass(posterElement, 3);
+      posterElement.classList.add(SELECTORS.processedClass.hide);
+    });
+
+    // Diary
+    document.querySelectorAll(`.td-film-details [data-film-id="${id}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
+      addFilterTitleClass(posterElement, 2);
+      posterElement.classList.add(SELECTORS.processedClass.hide);
+    });
+
+    // Popular with friends, competitions
+    const remainingElements = document.querySelectorAll(
+      `div:not(.popmenu):not(.actions-panel) [data-film-id="${id}"]:not(aside [data-film-id="${id}"]):not(.${SELECTORS.processedClass.hide})`,
+    );
+    remainingElements.forEach(posterElement => {
+      addFilterTitleClass(posterElement, 0);
+    });
+  }
+
+  function addToHiddenTitles(titleMetadata) {
+    log(DEBUG, 'addToHiddenTitles()');
+
+    const filteredTitles = getFilteredTitles();
+    filteredTitles.push(titleMetadata);
+    log(VERBOSE, 'filteredTitles', filteredTitles);
+
+    GMC.set('filteredTitles', JSON.stringify(filteredTitles));
+    GMC.save();
+  }
+
+  function applyFilters() {
+    log(DEBUG, 'applyFilters()');
+
+    const filteredTitles = getFilteredTitles();
+    log(VERBOSE, 'filteredTitles', filteredTitles);
+
+    filteredTitles.forEach(titleMetadata => addTitle(titleMetadata));
+  }
+
   function buildUserscriptLink(userscriptListItem, addToListLink, addThisFilmLink) {
     const userscriptLink = userscriptListItem.firstElementChild;
     userscriptListItem.onclick = (event) => {
@@ -279,93 +341,6 @@
     userscriptLink.removeAttribute('class');
 
     return userscriptListItem;
-  }
-
-  function maybeAddListItemToSidebar() {
-    log(DEBUG, 'maybeAddListItemToSidebar()');
-
-    if (document.querySelector(createId(SELECTORS.userpanel.userscriptListItemId))) return;
-
-    const userpanel = document.querySelector(SELECTORS.userpanel.self);
-
-    if (!userpanel) {
-      log(INFO, 'Userpanel not found');
-      return;
-    }
-
-    const secondLastListItem = userpanel.querySelector('li:nth-last-child(2)');
-    if (!secondLastListItem ) {
-      log(INFO, 'Second last list item not found');
-      return;
-    }
-
-    let userscriptListItem = secondLastListItem.cloneNode(true);
-    userscriptListItem.setAttribute('id', SELECTORS.userpanel.userscriptListItemId);
-
-    const addToListLink = secondLastListItem.firstElementChild;
-    const addThisFilmLink = userpanel.querySelector(SELECTORS.userpanel.addThisFilm);
-
-    userscriptListItem = buildUserscriptLink(userscriptListItem, addToListLink, addThisFilmLink);
-
-    secondLastListItem.parentNode.insertBefore(userscriptListItem, userpanel.querySelector('li:nth-last-of-type(1)'));
-  }
-
-  function addTitle({ id, slug }) {
-    log(DEBUG, 'addTitle()');
-
-    // Activity page reviews
-    document.querySelectorAll(`section.activity-row [data-film-id="${id}"]`).forEach(posterElement => {
-      addFilterTitleClass(posterElement, 3);
-      posterElement.classList.add(SELECTORS.processedClass.hide);
-    });
-
-    // Activity page likes
-    document.querySelectorAll(`section.activity-row .activity-summary a[href*="${slug}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
-      addFilterTitleClass(posterElement, 3);
-      posterElement.classList.add(SELECTORS.processedClass.hide);
-    });
-
-    // New from friends
-    document.querySelectorAll(`.poster-container [data-film-id="${id}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
-      addFilterTitleClass(posterElement, 1);
-      posterElement.classList.add(SELECTORS.processedClass.hide);
-    });
-
-    // Reviews
-    document.querySelectorAll(`.review-tile [data-film-id="${id}"]:not(.${SELECTORS.processedClass.hide})`).forEach(posterElement => {
-      addFilterTitleClass(posterElement, 3);
-      posterElement.classList.add(SELECTORS.processedClass.hide);
-    });
-
-    // TODO: Diary
-
-    // Popular with friends, competitions
-    const remainingElements = document.querySelectorAll(
-      `div:not(.popmenu):not(.actions-panel) [data-film-id="${id}"]:not(aside [data-film-id="${id}"]):not(.${SELECTORS.processedClass.hide})`,
-    );
-    remainingElements.forEach(posterElement => {
-      addFilterTitleClass(posterElement, 0);
-    });
-  }
-
-  function addToHiddenTitles(titleMetadata) {
-    log(DEBUG, 'addToHiddenTitles()');
-
-    const filteredTitles = getFilteredTitles();
-    filteredTitles.push(titleMetadata);
-    log(VERBOSE, 'filteredTitles', filteredTitles);
-
-    GMC.set('filteredTitles', JSON.stringify(filteredTitles));
-    GMC.save();
-  }
-
-  function applyFilters() {
-    log(DEBUG, 'applyFilters()');
-
-    const filteredTitles = getFilteredTitles();
-    log(VERBOSE, 'filteredTitles', filteredTitles);
-
-    filteredTitles.forEach(titleMetadata => addTitle(titleMetadata));
   }
 
   function createFormRow({
@@ -729,6 +704,35 @@
     userscriptConfigurationDiv.appendChild(saveDiv);
 
     favoriteFilmsDiv.parentNode.insertBefore(userscriptConfigurationDiv, favoriteFilmsDiv.nextSibling);
+  }
+
+  function maybeAddListItemToSidebar() {
+    log(DEBUG, 'maybeAddListItemToSidebar()');
+
+    if (document.querySelector(createId(SELECTORS.userpanel.userscriptListItemId))) return;
+
+    const userpanel = document.querySelector(SELECTORS.userpanel.self);
+
+    if (!userpanel) {
+      log(INFO, 'Userpanel not found');
+      return;
+    }
+
+    const secondLastListItem = userpanel.querySelector('li:nth-last-child(2)');
+    if (!secondLastListItem ) {
+      log(INFO, 'Second last list item not found');
+      return;
+    }
+
+    let userscriptListItem = secondLastListItem.cloneNode(true);
+    userscriptListItem.setAttribute('id', SELECTORS.userpanel.userscriptListItemId);
+
+    const addToListLink = secondLastListItem.firstElementChild;
+    const addThisFilmLink = userpanel.querySelector(SELECTORS.userpanel.addThisFilm);
+
+    userscriptListItem = buildUserscriptLink(userscriptListItem, addToListLink, addThisFilmLink);
+
+    secondLastListItem.parentNode.insertBefore(userscriptListItem, userpanel.querySelector('li:nth-last-of-type(1)'));
   }
 
   function removeFilterTitleClass(element, levelsUp = 0) {

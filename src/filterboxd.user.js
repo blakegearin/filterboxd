@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filterboxd
 // @namespace    https://github.com/blakegearin/filterboxd
-// @version      0.3.0
+// @version      0.4.0
 // @description  Filter titles on Letterboxd
 // @author       Blake Gearin
 // @match        https://letterboxd.com/*
@@ -303,6 +303,77 @@
     filteredTitles.forEach(titleMetadata => addTitle(titleMetadata));
   }
 
+  function createFormRow({
+    formRowClass = [],
+    formRowStyle = '',
+    labelText = '',
+    inputValue = '',
+    inputType = 'text',
+    inputStyle = '',
+    selectArray = [],
+    selectOnChange = () => {},
+    notes = '',
+    notesStyle = '',
+  }) {
+    const formRow = document.createElement('div');
+    formRow.classList.add('form-row');
+    formRow.style.cssText = formRowStyle;
+    formRow.classList.add(...formRowClass);
+
+    const selectList = document.createElement('div');
+    selectList.classList.add('select-list');
+
+    const label = document.createElement('label');
+    label.classList.add('label');
+    label.textContent = labelText;
+    selectList.appendChild(label);
+
+    const inputDiv = document.createElement('div');
+    inputDiv.classList.add('input');
+    inputDiv.style.cssText = inputStyle;
+
+    if (inputType === 'select') {
+      const select = document.createElement('select');
+      select.classList.add('select');
+
+      selectArray.forEach(option => {
+        const optionElement = document.createElement('option');
+        optionElement.value = option;
+        optionElement.textContent = option;
+
+        if (option === inputValue) optionElement.setAttribute('selected', 'selected');
+
+        select.appendChild(optionElement);
+      });
+
+      select.onchange = selectOnChange;
+
+      inputDiv.appendChild(select);
+    } else if (inputType === 'text') {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.classList.add('field');
+      input.value = inputValue;
+
+      inputDiv.appendChild(input);
+    }
+
+    selectList.appendChild(inputDiv);
+
+    if (notes) {
+      const notesElement = document.createElement('p');
+      notesElement.classList.add('notes');
+      notesElement.style.cssText = notesStyle;
+      notesElement.textContent = notes;
+
+      selectList.appendChild(notesElement);
+    }
+
+    formRow.appendChild(selectList);
+
+    return formRow;
+  }
+
   function displaySavedBadge() {
     const savedBadge = document.querySelector(`.${SELECTORS.settings.savedBadgeClass}`);
 
@@ -345,20 +416,25 @@
     let behaviorStyle;
     let behaviorType = GMC.get('behaviorType');
 
-    const behaviorFadeValue = GMC.get('behaviorFadeValue');
-    log(VERBOSE, 'behaviorFadeValue', behaviorFadeValue);
+    const behaviorFadeAmount = GMC.get('behaviorFadeAmount');
+    log(VERBOSE, 'behaviorFadeAmount', behaviorFadeAmount);
+
+    const behaviorCustomValue = GMC.get('behaviorCustomValue');
+    log(VERBOSE, 'behaviorCustomValue', behaviorCustomValue);
 
     switch (behaviorType) {
       case 'Remove':
         behaviorStyle = 'display: none !important;';
         break;
       case 'Fade':
-        behaviorStyle = `opacity: ${behaviorFadeValue}%`;
+        behaviorStyle = `opacity: ${behaviorFadeAmount}%`;
         break;
       case 'Custom':
-        behaviorStyle = '';
+        behaviorStyle = behaviorCustomValue;
         break;
     }
+
+    updateBehaviorCSSVariables(behaviorType);
 
     log(VERBOSE, 'behaviorStyle', behaviorStyle);
 
@@ -381,7 +457,7 @@
       }
 
       .hidden {
-        display: none;
+        visibility: hidden;
       }
 
       .fade {
@@ -465,11 +541,105 @@
     hiddenTitlesDiv.appendChild(hiddenTitlesParagraph);
     userscriptConfigurationDiv.append(hiddenTitlesDiv);
 
-    let behaviorDiv = document.createElement('div');
-    behaviorDiv.classList.add('form-row');
+    let formColumnsDiv = document.createElement('div');
+    formColumnsDiv.classList.add('form-columns', '-cols2');
+
+    // Behavior
+    const behaviorValue = GMC.get('behaviorType');
+    log(DEBUG, 'behaviorValue', behaviorValue);
+
+    const behaviorChange = (event) => {
+      const behaviorType = event.target.value;
+      updateBehaviorCSSVariables(behaviorType);
+    };
+
+    const behaviorFormRow = createFormRow({
+      formRowStyle: 'width: 29%;',
+      labelText: 'Behavior',
+      inputValue: behaviorValue,
+      inputType: 'select',
+      selectArray: [ 'Remove', 'Fade', 'Custom' ],
+      selectOnChange: behaviorChange,
+    });
+
+    formColumnsDiv.appendChild(behaviorFormRow);
+
+    // Fade amount
+    const behaviorFadeAmount = parseInt(GMC.get('behaviorFadeAmount'));
+    log(DEBUG, 'behaviorFadeAmount', behaviorFadeAmount);
+
+    const fadeAmountFormRow = createFormRow({
+      formRowClass: ['update-details'],
+      formRowStyle: 'width: 68.8%; float: right; display: var(--filterboxd-behavior-fade);',
+      labelText: 'Amount',
+      inputValue: behaviorFadeAmount,
+      inputType: 'select',
+      inputStyle: 'width: 100px !important;',
+      selectArray: [ 0, 5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90],
+      notes: '%',
+      notesStyle: 'width: 10px; margin-left: 14px;',
+    });
+
+    formColumnsDiv.appendChild(fadeAmountFormRow);
+
+    // Custom CSS
+    const behaviorCustomValue = GMC.get('behaviorCustomValue');
+    log(DEBUG, 'behaviorCustomValue', behaviorCustomValue);
+
+    const cssFormRow = createFormRow({
+      formRowStyle: 'width: 68.8%; float: right; display: var(--filterboxd-behavior-custom);',
+      labelText: 'CSS',
+      inputValue: behaviorCustomValue,
+      inputType: 'text',
+    });
+
+    formColumnsDiv.appendChild(cssFormRow);
+
+    userscriptConfigurationDiv.appendChild(formColumnsDiv);
+
+    const clearDiv = userscriptConfigurationDiv.querySelector(SELECTORS.settings.clear);
+    clearDiv.remove();
+
+    let saveDiv = document.createElement('div');
+    saveDiv.style.cssText = 'display: flex; align-items: center;';
+
+    let saveInput = document.createElement('input');
+    saveInput.classList.add('button', 'button-action');
+    saveInput.setAttribute('value', 'Save');
+    saveInput.setAttribute('type', 'submit');
+    saveInput.onclick = (event) => {
+      event.preventDefault();
+
+      const behaviorType = behaviorFormRow.querySelector('select').value;
+      log(DEBUG, 'behaviorType', behaviorType);
+
+      GMC.set('behaviorType', behaviorType);
+      GMC.save();
+
+      updateBehaviorCSSVariables(behaviorType);
+
+      if (behaviorType === 'Fade') {
+        const behaviorFadeAmount = fadeAmountFormRow.querySelector('select').value;
+        log(DEBUG, 'behaviorFadeAmount', behaviorFadeAmount);
+
+        GMC.set('behaviorFadeAmount', behaviorFadeAmount);
+        GMC.save();
+      } else if (behaviorType === 'Custom') {
+        const behaviorCustomValue = cssFormRow.querySelector('input').value;
+        log(DEBUG, 'behaviorCustomValue', behaviorCustomValue);
+
+        GMC.set('behaviorCustomValue', behaviorCustomValue);
+        GMC.save();
+      }
+
+      displaySavedBadge();
+    };
+
+    saveDiv.appendChild(saveInput);
 
     let checkContainerDiv = document.createElement('div');
     checkContainerDiv.classList.add('check-container');
+    checkContainerDiv.style.cssText = 'margin-left: 10px;';
 
     let usernameAvailableParagraph = document.createElement('p');
     usernameAvailableParagraph.classList.add(
@@ -478,6 +648,7 @@
       'hidden',
       SELECTORS.settings.savedBadgeClass,
     );
+    usernameAvailableParagraph.style.cssText = 'float: left;';
 
     let iconSpan = document.createElement('span');
     iconSpan.classList.add('icon');
@@ -488,63 +659,9 @@
     usernameAvailableParagraph.appendChild(savedText);
 
     checkContainerDiv.appendChild(usernameAvailableParagraph);
+    saveDiv.appendChild(checkContainerDiv);
 
-    let selectListDiv = document.createElement('div');
-    selectListDiv.classList.add('select-list');
-
-    let behaviorLabel = document.createElement('label');
-    behaviorLabel.classList.add('label');
-    behaviorLabel.innerText = 'Behavior';
-
-    let behaviorInputDiv = document.createElement('div');
-    behaviorInputDiv.classList.add('input');
-
-    let behaviorSelect = document.createElement('select');
-    behaviorSelect.classList.add('select');
-    behaviorSelect.onchange = (event) => {
-      console.log('event');
-      console.dir(event, { depth: null });
-
-      console.log('event.target');
-      console.dir(event.target, { depth: null });
-
-      console.log('event.target.value');
-      console.dir(event.target.value, { depth: null });
-
-      GMC.set('behaviorType', event.target.value);
-      GMC.save();
-
-      displaySavedBadge();
-    };
-
-    const behaviorValue = GMC.get('behaviorType');
-    log(SILENT, 'behaviorValue', behaviorValue);
-
-    const behaviorOptions = [
-      'Remove',
-      'Fade',
-      'Custom',
-    ];
-
-    behaviorOptions.forEach(optionName => {
-      let option = document.createElement('option');
-      option.setAttribute('value', optionName);
-      option.innerText = optionName;
-
-      if (optionName === behaviorValue) option.setAttribute('selected', 'selected');
-
-      behaviorSelect.appendChild(option);
-    });
-
-    behaviorInputDiv.appendChild(behaviorSelect);
-    selectListDiv.appendChild(behaviorLabel);
-    selectListDiv.appendChild(behaviorInputDiv);
-    behaviorDiv.appendChild(checkContainerDiv);
-    behaviorDiv.appendChild(selectListDiv);
-    userscriptConfigurationDiv.appendChild(behaviorDiv);
-
-    const clearDiv = userscriptConfigurationDiv.querySelector(SELECTORS.settings.clear);
-    clearDiv.remove();
+    userscriptConfigurationDiv.appendChild(saveDiv);
 
     favoriteFilmsDiv.parentNode.insertBefore(userscriptConfigurationDiv, favoriteFilmsDiv.nextSibling);
   }
@@ -608,6 +725,16 @@
     });
   }
 
+  function updateBehaviorCSSVariables(behaviorType) {
+    log(DEBUG, 'updateBehaviorTypeVariable()');
+
+    const fadeValue = behaviorType === 'Fade' ? 'block' : 'none';
+    document.documentElement.style.setProperty('--filterboxd-behavior-fade', fadeValue);
+
+    const customValue = behaviorType === 'Custom' ? 'block' : 'none';
+    document.documentElement.style.setProperty('--filterboxd-behavior-custom', customValue);
+  }
+
   function updateLinkInPopMenu(titleIsHidden, link) {
     log(DEBUG, 'updateLinkInPopMenu()');
 
@@ -634,7 +761,11 @@
         ],
         default: 'Fade',
       },
-      behaviorFadeValue: {
+      behaviorCustomValue: {
+        type: 'text',
+        default: '',
+      },
+      behaviorFadeAmount: {
         type: 'int',
         default: 10,
       },

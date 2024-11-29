@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filterboxd
 // @namespace    https://github.com/blakegearin/filterboxd
-// @version      0.9.1
+// @version      0.9.2
 // @description  Filter content on Letterboxd
 // @author       Blake Gearin
 // @match        https://letterboxd.com/*
@@ -868,6 +868,7 @@
         if (link.getAttribute('href') === userscriptSettingsLink) return;
 
         userscriptSubNabListItem.classList.remove('selected');
+        userscriptTabDiv.style.display = 'none';
       };
     });
 

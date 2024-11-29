@@ -1,6 +1,6 @@
 {
   "name": "filterboxd",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Userscript to filter content on Letterboxd",
   "main": "src/filterboxd.user.js",
   "scripts": {

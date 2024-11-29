@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filterboxd
 // @namespace    https://github.com/blakegearin/filterboxd
-// @version      0.9.0
+// @version      0.9.1
 // @description  Filter content on Letterboxd
 // @author       Blake Gearin
 // @match        https://letterboxd.com/*
@@ -760,10 +760,6 @@
         const id = parseInt(removalLink.getAttribute('data-film-id'));
         const hiddenTitle = filteredTitles.find(hiddenTitle => hiddenTitle.id === id);
 
-        console.log(`hiddenTitle`);
-        console.dir(hiddenTitle, { depth: null });
-
-        // debugger;
         removeTitle(hiddenTitle);
         removeFromFilterTitles(hiddenTitle);
         removalLink.remove();
@@ -839,7 +835,7 @@
     const userscriptSubNabLink = document.createElement('a');
     userscriptSubNabListItem.appendChild(userscriptSubNabLink);
 
-    const userscriptSettingsLink = '/settings/?tab=filterboxd';
+    const userscriptSettingsLink = '/settings/?filterboxd';
     userscriptSubNabLink.setAttribute('href', userscriptSettingsLink);
     userscriptSubNabLink.setAttribute('data-id', 'filterboxd');
     userscriptSubNabLink.innerText = 'Filterboxd';
@@ -876,7 +872,7 @@
     });
 
     const urlParams = new URLSearchParams(window.location.search);
-    const tabSelected = urlParams.get('tab') === 'filterboxd';
+    const tabSelected = urlParams.get('filterboxd') !== null;
     log(VERBOSE, 'tabSelected', tabSelected);
 
     if (tabSelected) window.onload = () => userscriptSubNabLink.click();

@@ -1,7 +1,7 @@
 {
   "name": "filterboxd",
-  "version": "0.8.0",
-  "description": "Userscript to filter titles on Letterboxd",
+  "version": "0.9.0",
+  "description": "Userscript to filter content on Letterboxd",
   "main": "src/filterboxd.user.js",
   "scripts": {
     "lint": "eslint src/filterboxd.user.js",

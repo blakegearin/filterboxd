@@ -10,6 +10,6 @@
 
 # Filterboxd
 
-This is a [userscript](https://openuserjs.org/about/Userscript-Beginners-HOWTO) for filtering titles on [Letterboxd](https://letterboxd.com/).
+This is a [userscript](https://openuserjs.org/about/Userscript-Beginners-HOWTO) to filter content on [Letterboxd](https://letterboxd.com/).
 
 Not affiliated with Letterboxd Limited, The Movie Database, TiVo Platform Technologies LLC, or any of their affiliations.

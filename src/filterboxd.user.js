@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Filterboxd
 // @namespace    https://github.com/blakegearin/filterboxd
-// @version      0.8.0
-// @description  Filter titles on Letterboxd
+// @version      0.9.0
+// @description  Filter content on Letterboxd
 // @author       Blake Gearin
 // @match        https://letterboxd.com/*
 // @require      https://openuserjs.org/src/libs/sizzle/GM_config.js
@@ -158,8 +158,11 @@
       filteredTitleLinkClass: 'filtered-title-span',
       note: '.note',
       posterList: '.poster-list',
+      removePendingClass: 'remove-pending',
       savedBadgeClass: 'filtered-saved',
+      subNav: '.sub-nav',
       subtitle: '.mob-subtitle',
+      tabbedContentId: '#tabbed-content',
     },
     userpanel: {
       self: '#userpanel',
@@ -206,7 +209,6 @@
         userscriptListItem.classList.add(SELECTORS.filmPosterPopMenu.userscriptListItemClass);
 
         userscriptListItem = buildUserscriptLink(userscriptListItem, addToListLink, addThisFilmLink);
-
         lastListItem.parentNode.append(userscriptListItem);
       });
     });
@@ -398,55 +400,56 @@
     formRow.classList.add(...formRowClass);
 
     const selectList = document.createElement('div');
+    formRow.appendChild(selectList);
+
     selectList.classList.add('select-list');
 
     const label = document.createElement('label');
-    label.classList.add('label');
-    label.textContent = labelText;
     selectList.appendChild(label);
 
+    label.classList.add('label');
+    label.textContent = labelText;
+
     const inputDiv = document.createElement('div');
+    selectList.appendChild(inputDiv);
+
     inputDiv.classList.add('input');
     inputDiv.style.cssText = inputStyle;
 
     if (inputType === 'select') {
       const select = document.createElement('select');
+      inputDiv.appendChild(select);
+
       select.classList.add('select');
 
       selectArray.forEach(option => {
         const optionElement = document.createElement('option');
+        select.appendChild(optionElement);
+
         optionElement.value = option;
         optionElement.textContent = option;
 
         if (option === inputValue) optionElement.setAttribute('selected', 'selected');
-
-        select.appendChild(optionElement);
       });
 
       select.onchange = selectOnChange;
-
-      inputDiv.appendChild(select);
     } else if (inputType === 'text') {
       const input = document.createElement('input');
+      inputDiv.appendChild(input);
+
       input.type = 'text';
       input.classList.add('field');
       input.value = inputValue;
-
-      inputDiv.appendChild(input);
     }
-
-    selectList.appendChild(inputDiv);
 
     if (notes) {
       const notesElement = document.createElement('p');
+      selectList.appendChild(notesElement);
+
       notesElement.classList.add('notes');
       notesElement.style.cssText = notesStyle;
       notesElement.textContent = notes;
-
-      selectList.appendChild(notesElement);
     }
-
-    formRow.appendChild(selectList);
 
     return formRow;
   }
@@ -539,6 +542,12 @@
         color: #def;
       }
 
+      .${SELECTORS.settings.removePendingClass}
+      {
+        outline: 1px dashed #ee7000;
+        outline-offset: -1px;
+      }
+
       .hidden {
         visibility: hidden;
       }
@@ -563,34 +572,56 @@
   function maybeAddConfigurationToSettings() {
     log(DEBUG, 'maybeAddConfigurationToSettings()');
 
-    const configurationId = 'filterboxd-configuration';
-    const configurationExists = document.querySelector(configurationId);
+    const userscriptTabId = 'tab-filterboxd';
+    const configurationExists = document.querySelector(createId(userscriptTabId));
     log(VERBOSE, 'configurationExists', configurationExists);
 
     const onSettingsPage = window.location.href.includes('/settings/');
     log(VERBOSE, 'onSettingsPage', onSettingsPage);
 
     if (!onSettingsPage || configurationExists) {
-      log(DEBUG, 'Not on settings page or configuration is present');
+      log(DEBUG, 'Not in settings or Filterboxd configuration tab is present');
 
       return;
     }
 
-    log(DEBUG, 'On settings page and configuration not present');
+    const userscriptTabDiv = document.createElement('div');
+
+    // favoriteFilmsDiv.parentNode.insertBefore(userscriptTabDiv, favoriteFilmsDiv.nextSibling);
+    const settingsTabbedContent = document.querySelector(SELECTORS.settings.tabbedContentId);
+    settingsTabbedContent.appendChild(userscriptTabDiv);
+
+    userscriptTabDiv.setAttribute('id', userscriptTabId);
+    userscriptTabDiv.classList.add('tabbed-content-block');
+
+    const tabTitle = document.createElement('h2');
+    userscriptTabDiv.append(tabTitle);
+
+    tabTitle.style.cssText = 'margin-bottom: 1em;';
+    tabTitle.innerText = 'Filterboxd';
+
+    const tabPrimaryColumn = document.createElement('div');
+    userscriptTabDiv.append(tabPrimaryColumn);
+
+    tabPrimaryColumn.classList.add('col-10', 'overflow');
 
     const favoriteFilmsDiv = document.querySelector(SELECTORS.settings.favoriteFilms);
-    const userscriptConfigurationDiv = favoriteFilmsDiv.cloneNode(true);
+    const filteredFilmsDiv = favoriteFilmsDiv.cloneNode(true);
+    tabPrimaryColumn.appendChild(filteredFilmsDiv);
 
-    userscriptConfigurationDiv.setAttribute('id', configurationId);
-    const posterList = userscriptConfigurationDiv.querySelector(SELECTORS.settings.posterList);
+    const posterList = filteredFilmsDiv.querySelector(SELECTORS.settings.posterList);
     posterList.remove();
 
-    userscriptConfigurationDiv.setAttribute('style', 'margin-top: 4rem;');
-    userscriptConfigurationDiv.querySelector(SELECTORS.settings.subtitle).innerText = 'Filtered Films';
-    userscriptConfigurationDiv.querySelector(SELECTORS.settings.note).innerText = 'Click to open or right click to remove.';
+    filteredFilmsDiv.querySelector(SELECTORS.settings.subtitle).innerText = 'Filtered Films';
+    filteredFilmsDiv.querySelector(SELECTORS.settings.note).innerText =
+      'Right click to mark for removal.';
+
+    let hiddenTitlesDiv = document.createElement('div');
+    filteredFilmsDiv.append(hiddenTitlesDiv);
 
     const hiddenTitlesParagraph = document.createElement('p');
-    let hiddenTitlesDiv = document.createElement('div');
+    hiddenTitlesDiv.appendChild(hiddenTitlesParagraph);
+
     hiddenTitlesDiv.classList.add('text-sluglist');
 
     const filteredTitles = getFilteredTitles();
@@ -600,6 +631,8 @@
       log(VERBOSE, 'hiddenTitle', hiddenTitle);
 
       let filteredTitleLink = document.createElement('a');
+      hiddenTitlesParagraph.appendChild(filteredTitleLink);
+
       filteredTitleLink.href= `/film/${hiddenTitle.slug}`;
 
       filteredTitleLink.classList.add(
@@ -613,18 +646,13 @@
       filteredTitleLink.oncontextmenu = (event) => {
         event.preventDefault();
 
-        removeTitle(hiddenTitle);
-        removeFromFilterTitles(hiddenTitle);
-        filteredTitleLink.remove();
+        filteredTitleLink.classList.toggle(SELECTORS.settings.removePendingClass);
       };
-
-      hiddenTitlesParagraph.appendChild(filteredTitleLink);
     });
 
-    hiddenTitlesDiv.appendChild(hiddenTitlesParagraph);
-    userscriptConfigurationDiv.append(hiddenTitlesDiv);
-
     let formColumnsDiv = document.createElement('div');
+    filteredFilmsDiv.appendChild(formColumnsDiv);
+
     formColumnsDiv.classList.add('form-columns', '-cols2');
 
     // Behavior
@@ -709,20 +737,37 @@
 
     formColumnsDiv.appendChild(cssFormRow);
 
-    userscriptConfigurationDiv.appendChild(formColumnsDiv);
-
-    const clearDiv = userscriptConfigurationDiv.querySelector(SELECTORS.settings.clear);
+    const clearDiv = filteredFilmsDiv.querySelector(SELECTORS.settings.clear);
     clearDiv.remove();
 
-    let saveDiv = document.createElement('div');
-    saveDiv.style.cssText = 'display: flex; align-items: center;';
+    let buttonsRowDiv = document.createElement('div');
+    userscriptTabDiv.appendChild(buttonsRowDiv);
+
+    buttonsRowDiv.style.cssText = 'display: flex; align-items: center;';
+    buttonsRowDiv.classList.add('buttons', 'clear', 'row');
 
     let saveInput = document.createElement('input');
+    buttonsRowDiv.appendChild(saveInput);
+
     saveInput.classList.add('button', 'button-action');
-    saveInput.setAttribute('value', 'Save');
+    saveInput.setAttribute('value', 'Save Changes');
     saveInput.setAttribute('type', 'submit');
     saveInput.onclick = (event) => {
       event.preventDefault();
+
+      const pendingRemovals = hiddenTitlesParagraph.querySelectorAll(`.${SELECTORS.settings.removePendingClass}`);
+      pendingRemovals.forEach(removalLink => {
+        const id = parseInt(removalLink.getAttribute('data-film-id'));
+        const hiddenTitle = filteredTitles.find(hiddenTitle => hiddenTitle.id === id);
+
+        console.log(`hiddenTitle`);
+        console.dir(hiddenTitle, { depth: null });
+
+        // debugger;
+        removeTitle(hiddenTitle);
+        removeFromFilterTitles(hiddenTitle);
+        removalLink.remove();
+      });
 
       const behaviorType = behaviorFormRow.querySelector('select').value;
       log(DEBUG, 'behaviorType', behaviorType);
@@ -761,13 +806,15 @@
       displaySavedBadge();
     };
 
-    saveDiv.appendChild(saveInput);
-
     let checkContainerDiv = document.createElement('div');
+    buttonsRowDiv.appendChild(checkContainerDiv);
+
     checkContainerDiv.classList.add('check-container');
     checkContainerDiv.style.cssText = 'margin-left: 10px;';
 
     let usernameAvailableParagraph = document.createElement('p');
+    checkContainerDiv.appendChild(usernameAvailableParagraph);
+
     usernameAvailableParagraph.classList.add(
       'username-available',
       'has-icon',
@@ -777,19 +824,62 @@
     usernameAvailableParagraph.style.cssText = 'float: left;';
 
     let iconSpan = document.createElement('span');
+    usernameAvailableParagraph.appendChild(iconSpan);
+
     iconSpan.classList.add('icon');
 
     const savedText = document.createTextNode('Saved');
-
-    usernameAvailableParagraph.appendChild(iconSpan);
     usernameAvailableParagraph.appendChild(savedText);
 
-    checkContainerDiv.appendChild(usernameAvailableParagraph);
-    saveDiv.appendChild(checkContainerDiv);
+    const settingsSubNav = document.querySelector(SELECTORS.settings.subNav);
 
-    userscriptConfigurationDiv.appendChild(saveDiv);
+    const userscriptSubNabListItem = document.createElement('li');
+    settingsSubNav.appendChild(userscriptSubNabListItem);
 
-    favoriteFilmsDiv.parentNode.insertBefore(userscriptConfigurationDiv, favoriteFilmsDiv.nextSibling);
+    const userscriptSubNabLink = document.createElement('a');
+    userscriptSubNabListItem.appendChild(userscriptSubNabLink);
+
+    const userscriptSettingsLink = '/settings/?tab=filterboxd';
+    userscriptSubNabLink.setAttribute('href', userscriptSettingsLink);
+    userscriptSubNabLink.setAttribute('data-id', 'filterboxd');
+    userscriptSubNabLink.innerText = 'Filterboxd';
+    userscriptSubNabLink.onclick = (event) => {
+      event.preventDefault();
+
+      Array.from(settingsSubNav.children).forEach(listItem => {
+        const link = listItem.querySelector('a');
+
+        if (link.getAttribute('data-id') === 'filterboxd') {
+          listItem.classList.add('selected');
+        } else {
+          listItem.classList.remove('selected');
+        }
+      });
+
+      Array.from(settingsTabbedContent.children).forEach(tab => {
+        if (!tab.id) return;
+
+        const display = tab.id === userscriptTabId ? 'block' : 'none';
+        tab.style.cssText = `display: ${display};`;
+      });
+
+      window.history.replaceState(null, '', `https://letterboxd.com${userscriptSettingsLink}`);
+    };
+
+    Array.from(settingsSubNav.children).forEach(listItem => {
+      listItem.onclick = (event) => {
+        const link = event.target;
+        if (link.getAttribute('href') === userscriptSettingsLink) return;
+
+        userscriptSubNabListItem.classList.remove('selected');
+      };
+    });
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabSelected = urlParams.get('tab') === 'filterboxd';
+    log(VERBOSE, 'tabSelected', tabSelected);
+
+    if (tabSelected) window.onload = () => userscriptSubNabLink.click();
   }
 
   function maybeAddListItemToSidebar() {

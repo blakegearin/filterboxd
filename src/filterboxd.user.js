@@ -154,7 +154,11 @@
       addToList: '.film-poster-popmenu .menu-item-add-to-list',
       addThisFilm: '.film-poster-popmenu .menu-item-add-this-film',
     },
-    filterTitleClass: 'filterboxd-filter-title',
+    filter: {
+      filmClass: 'filterboxd-filter-film',
+      reviewClass: 'filterboxd-filter-review',
+      reviewsWithSpoilers: '.film-detail:has(.contains-spoilers)',
+    },
     processedClass: {
       apply: 'filterboxd-hide-processed',
       remove: 'filterboxd-unhide-processed',
@@ -223,8 +227,8 @@
     return;
   }
 
-  function addTitle({ id, slug }) {
-    log(DEBUG, 'addTitle()');
+  function addFilterToFilm({ id, slug }) {
+    log(DEBUG, 'addFilterToFilm()');
 
     const idMatch = `[data-film-id="${id}"]`;
     let appliedSelector = `.${SELECTORS.processedClass.apply}`;
@@ -236,27 +240,27 @@
 
     // Activity page reviews
     document.querySelectorAll(`section.activity-row ${idMatch}`).forEach(posterElement => {
-      applyFilterToElement(posterElement, 3);
+      applyFilterToFilm(posterElement, 3);
     });
 
     // Activity page likes
     document.querySelectorAll(`section.activity-row .activity-summary a[href*="${slug}"]:not(${appliedSelector})`).forEach(posterElement => {
-      applyFilterToElement(posterElement, 3);
+      applyFilterToFilm(posterElement, 3);
     });
 
     // New from friends
     document.querySelectorAll(`.poster-container ${idMatch}:not(${appliedSelector})`).forEach(posterElement => {
-      applyFilterToElement(posterElement, 1);
+      applyFilterToFilm(posterElement, 1);
     });
 
     // Reviews
     document.querySelectorAll(`.review-tile ${idMatch}:not(${appliedSelector})`).forEach(posterElement => {
-      applyFilterToElement(posterElement, 3);
+      applyFilterToFilm(posterElement, 3);
     });
 
     // Diary
     document.querySelectorAll(`.td-film-details [data-original-img-src]${idMatch}:not(${appliedSelector})`).forEach(posterElement => {
-      applyFilterToElement(posterElement, 2);
+      applyFilterToFilm(posterElement, 2);
     });
 
     // Popular with friends, competitions
@@ -264,15 +268,15 @@
       `div:not(.popmenu):not(.actions-panel) ${idMatch}:not(aside [data-film-id="${id}"]):not(${appliedSelector})`,
     );
     remainingElements.forEach(posterElement => {
-      applyFilterToElement(posterElement, 0);
+      applyFilterToFilm(posterElement, 0);
     });
   }
 
-  function addToHiddenTitles(titleMetadata) {
+  function addToHiddenTitles(filmMetadata) {
     log(DEBUG, 'addToHiddenTitles()');
 
     const filmFilter = getFilter('filmFilter');
-    filmFilter.push(titleMetadata);
+    filmFilter.push(filmMetadata);
     log(VERBOSE, 'filmFilter', filmFilter);
 
     setFilter('filmFilter', filmFilter);
@@ -284,13 +288,37 @@
     const filmFilter = getFilter('filmFilter');
     log(VERBOSE, 'filmFilter', filmFilter);
 
+    const reviewFilter = getFilter('reviewFilter');
+    log(VERBOSE, 'reviewFilter', reviewFilter);
+
+    const replaceBehavior = GMC.get('reviewBehaviorType') === 'Replace text';
+    log(VERBOSE, 'replaceBehavior', replaceBehavior);
+
+    const reviewBehaviorReplaceValue = GMC.get('reviewBehaviorReplaceValue');
+    log(VERBOSE, 'reviewBehaviorReplaceValue', reviewBehaviorReplaceValue);
+
     modifyThenObserve(() => {
-      filmFilter.forEach(titleMetadata => addTitle(titleMetadata));
+      filmFilter.forEach(filmMetadata => addFilterToFilm(filmMetadata));
+
+      const reviewsToFilter = [];
+
+      if (reviewFilter.spoilers) {
+        const reviewsWithSpoilers = document.querySelectorAll(SELECTORS.filter.reviewsWithSpoilers);
+        reviewsToFilter.push(...reviewsWithSpoilers);
+      }
+
+      reviewsToFilter.forEach(filteredTitleLink => {
+        if (replaceBehavior) {
+          filteredTitleLink.querySelector('.body-text').innerText = reviewBehaviorReplaceValue;
+        } else {
+          filteredTitleLink.classList.add(SELECTORS.filter.reviewClass);
+        }
+      });
     });
   }
 
-  function applyFilterToElement(element, levelsUp = 0) {
-    log(DEBUG, 'applyFilterToElement()');
+  function applyFilterToFilm(element, levelsUp = 0) {
+    log(DEBUG, 'applyFilterToFilm()');
 
     const replaceBehavior = GMC.get('filmBehaviorType') === 'Replace poster';
     log(VERBOSE, 'replaceBehavior', replaceBehavior);
@@ -326,18 +354,18 @@
 
       log(VERBOSE, 'target', target);
 
-      target.classList.add(SELECTORS.filterTitleClass);
+      target.classList.add(SELECTORS.filter.filmClass);
       element.classList.add(SELECTORS.processedClass.apply);
     }
   }
 
-  function buildBehaviorFormRows(parentDiv, filterType, selectArrayValues, behaviorsMetadata) {
-    const behaviorValue = GMC.get(`${filterType}BehaviorType`);
+  function buildBehaviorFormRows(parentDiv, filterName, selectArrayValues, behaviorsMetadata) {
+    const behaviorValue = GMC.get(`${filterName}BehaviorType`);
     log(DEBUG, 'behaviorValue', behaviorValue);
 
     const behaviorChange = (event) => {
       const filmBehaviorType = event.target.value;
-      updateBehaviorCSSVariables(filterType, filmBehaviorType);
+      updateBehaviorCSSVariables(filterName, filmBehaviorType);
     };
 
     const columnOneWidth = '33%';
@@ -360,7 +388,7 @@
 
     const fadeAmountFormRow = createFormRow({
       formRowClass: ['update-details'],
-      formRowStyle: `width: ${columnTwoWidth}; float: right; display: var(--filterboxd-${filterType}-behavior-fade);`,
+      formRowStyle: `width: ${columnTwoWidth}; float: right; display: var(--filterboxd-${filterName}-behavior-fade);`,
       labelText: 'Amount',
       inputValue: behaviorFadeAmount,
       inputType: 'select',
@@ -378,7 +406,7 @@
 
     const blurAmountFormRow = createFormRow({
       formRowClass: ['update-details'],
-      formRowStyle: `width: ${columnTwoWidth}; float: right; display: var(--filterboxd-${filterType}-behavior-blur);`,
+      formRowStyle: `width: ${columnTwoWidth}; float: right; display: var(--filterboxd-${filterName}-behavior-blur);`,
       labelText: 'Amount',
       inputValue: behaviorBlurAmount,
       inputType: 'select',
@@ -395,7 +423,7 @@
     log(DEBUG, 'behaviorReplaceValue', behaviorReplaceValue);
 
     const replaceValueFormRow = createFormRow({
-      formRowStyle: `width: ${columnTwoWidth}; float: right; display: var(--filterboxd-${filterType}-behavior-replace);`,
+      formRowStyle: `width: ${columnTwoWidth}; float: right; display: var(--filterboxd-${filterName}-behavior-replace);`,
       labelText: behaviorsMetadata.replace.labelText,
       inputValue: behaviorReplaceValue,
       inputType: 'text',
@@ -408,7 +436,7 @@
     log(DEBUG, 'behaviorCustomValue', behaviorCustomValue);
 
     const cssFormRow = createFormRow({
-      formRowStyle: `width: ${columnTwoWidth}; float: right; display: var(--filterboxd-${filterType}-behavior-custom);`,
+      formRowStyle: `width: ${columnTwoWidth}; float: right; display: var(--filterboxd-${filterName}-behavior-custom);`,
       labelText: 'CSS',
       inputValue: behaviorCustomValue,
       inputType: 'text',
@@ -481,7 +509,7 @@
       const name = link.getAttribute('data-film-name');
       const year = link.getAttribute('data-film-release-year');
 
-      const titleMetadata = {
+      const filmMetadata = {
         id,
         slug,
         name,
@@ -492,11 +520,11 @@
 
       modifyThenObserve(() => {
         if (titleIsHidden) {
-          removeTitle(titleMetadata);
-          removeFromFilterTitles(titleMetadata);
+          removeFilterFromFilm(filmMetadata);
+          removeFromFilmFilter(filmMetadata);
         } else {
-          addTitle(titleMetadata);
-          addToHiddenTitles(titleMetadata);
+          addFilterToFilm(filmMetadata);
+          addToHiddenTitles(filmMetadata);
         }
 
         updateLinkInPopMenu(!titleIsHidden, link);
@@ -517,7 +545,7 @@
     const titleYear = addThisFilmLink.getAttribute('data-film-release-year');
     userscriptLink.setAttribute('data-film-release-year', titleYear);
 
-    const titleIsHidden = getFilter('filmFilter').some(hiddenTitle => hiddenTitle.id === titleId);
+    const titleIsHidden = getFilter('filmFilter').some(filteredFilm => filteredFilm.id === titleId);
     updateLinkInPopMenu(titleIsHidden, userscriptLink);
 
     userscriptLink.removeAttribute('class');
@@ -617,6 +645,40 @@
     return JSON.parse(GMC.get(filterName));
   }
 
+  function getFilterBehaviorStyle(filterName) {
+    let behaviorStyle;
+    let behaviorType = GMC.get(`${filterName}BehaviorType`);
+    log(VERBOSE, 'behaviorType', behaviorType);
+
+    const behaviorFadeAmount = GMC.get(`${filterName}BehaviorFadeAmount`);
+    log(VERBOSE, 'behaviorFadeAmount', behaviorFadeAmount);
+
+    const behaviorBlurAmount = GMC.get(`${filterName}BehaviorBlurAmount`);
+    log(VERBOSE, 'behaviorBlurAmount', behaviorBlurAmount);
+
+    const behaviorCustomValue = GMC.get(`${filterName}BehaviorCustomValue`);
+    log(VERBOSE, 'behaviorCustomValue', behaviorCustomValue);
+
+    switch (behaviorType) {
+      case 'Remove':
+        behaviorStyle = 'display: none !important;';
+        break;
+      case 'Fade':
+        behaviorStyle = `opacity: ${behaviorFadeAmount}%`;
+        break;
+      case 'Blur':
+        behaviorStyle = `filter: blur(${behaviorBlurAmount}px)`;
+        break;
+      case 'Custom':
+        behaviorStyle = behaviorCustomValue;
+        break;
+    }
+
+    updateBehaviorCSSVariables(filterName, behaviorType);
+
+    return behaviorStyle;
+  }
+
   function gmcInitialized() {
     log(DEBUG, 'gmcInitialized()');
 
@@ -639,44 +701,21 @@
     let userscriptStyle = document.createElement('style');
     userscriptStyle.setAttribute('id', 'filterboxd-style');
 
-    let behaviorStyle;
-    let filmBehaviorType = GMC.get('filmBehaviorType');
+    const filmBehaviorStyle = getFilterBehaviorStyle('film');
+    log(VERBOSE, 'filmBehaviorStyle', filmBehaviorStyle);
 
-    const filmBehaviorFadeAmount = GMC.get('filmBehaviorFadeAmount');
-    log(VERBOSE, 'filmBehaviorFadeAmount', filmBehaviorFadeAmount);
-
-    const filmBehaviorBlurAmount = GMC.get('filmBehaviorBlurAmount');
-    log(VERBOSE, 'filmBehaviorBlurAmount', filmBehaviorBlurAmount);
-
-    const filmBehaviorCustomValue = GMC.get('filmBehaviorCustomValue');
-    log(VERBOSE, 'filmBehaviorCustomValue', filmBehaviorCustomValue);
-
-    switch (filmBehaviorType) {
-      case 'Remove':
-        behaviorStyle = 'display: none !important;';
-        break;
-      case 'Fade':
-        behaviorStyle = `opacity: ${filmBehaviorFadeAmount}%`;
-        break;
-      case 'Blur':
-        behaviorStyle = `filter: blur(${filmBehaviorBlurAmount}px)`;
-        break;
-      case 'Custom':
-        behaviorStyle = filmBehaviorCustomValue;
-        break;
-    }
-
-    updateBehaviorCSSVariables('film', filmBehaviorType);
-
-    let reviewBehaviorType = GMC.get('reviewBehaviorType');
-    updateBehaviorCSSVariables('review', reviewBehaviorType);
-
-    log(VERBOSE, 'behaviorStyle', behaviorStyle);
+    const reviewBehaviorStyle = getFilterBehaviorStyle('review');
+    log(VERBOSE, 'reviewBehaviorStyle', reviewBehaviorStyle);
 
     userscriptStyle.textContent += `
-      .${SELECTORS.filterTitleClass}
+      .${SELECTORS.filter.filmClass}
       {
-        ${behaviorStyle}
+        ${filmBehaviorStyle}
+      }
+
+      .${SELECTORS.filter.reviewClass}
+      {
+        ${reviewBehaviorStyle}
       }
 
       .${SELECTORS.settings.filteredTitleLinkClass}
@@ -834,21 +873,21 @@
     const filmFilter = getFilter('filmFilter');
     log(VERBOSE, 'filmFilter', filmFilter);
 
-    filmFilter.forEach(hiddenTitle => {
-      log(VERBOSE, 'hiddenTitle', hiddenTitle);
+    filmFilter.forEach(filteredFilm => {
+      log(VERBOSE, 'filteredFilm', filteredFilm);
 
       let filteredTitleLink = document.createElement('a');
       hiddenTitlesParagraph.appendChild(filteredTitleLink);
 
-      filteredTitleLink.href= `/film/${hiddenTitle.slug}`;
+      filteredTitleLink.href= `/film/${filteredFilm.slug}`;
 
       filteredTitleLink.classList.add(
         'text-slug',
         SELECTORS.processedClass.apply,
         SELECTORS.settings.filteredTitleLinkClass,
       );
-      filteredTitleLink.setAttribute('data-film-id', hiddenTitle.id);
-      filteredTitleLink.innerText = `${hiddenTitle.name} (${hiddenTitle.year})`;
+      filteredTitleLink.setAttribute('data-film-id', filteredFilm.id);
+      filteredTitleLink.innerText = `${filteredFilm.name} (${filteredFilm.year})`;
 
       filteredTitleLink.oncontextmenu = (event) => {
         event.preventDefault();
@@ -906,10 +945,10 @@
       const pendingRemovals = hiddenTitlesParagraph.querySelectorAll(`.${SELECTORS.settings.removePendingClass}`);
       pendingRemovals.forEach(removalLink => {
         const id = parseInt(removalLink.getAttribute('data-film-id'));
-        const hiddenTitle = filmFilter.find(hiddenTitle => hiddenTitle.id === id);
+        const filteredFilm = filmFilter.find(filteredFilm => filteredFilm.id === id);
 
-        removeTitle(hiddenTitle);
-        removeFromFilterTitles(hiddenTitle);
+        removeFilterFromFilm(filteredFilm);
+        removeFromFilmFilter(filteredFilm);
         removalLink.remove();
       });
 
@@ -1066,20 +1105,20 @@
 
       log(VERBOSE, 'target', target);
 
-      target.classList.remove(SELECTORS.filterTitleClass);
+      target.classList.remove(SELECTORS.filter.filmClass);
       element.classList.add(SELECTORS.processedClass.remove);
     }
   }
 
-  function removeFromFilterTitles(titleMetadata) {
+  function removeFromFilmFilter(filmMetadata) {
     let filmFilter = getFilter('filmFilter');
-    filmFilter = filmFilter.filter(hiddenTitle => hiddenTitle.id !== titleMetadata.id);
+    filmFilter = filmFilter.filter(filteredFilm => filteredFilm.id !== filmMetadata.id);
 
     setFilter('filmFilter', filmFilter);
   }
 
-  function removeTitle({ id, slug }) {
-    log(DEBUG, 'removeTitle()');
+  function removeFilterFromFilm({ id, slug }) {
+    log(DEBUG, 'removeFilterFromFilm()');
 
     const idMatch = `[data-film-id="${id}"]`;
     let removedSelector = `.${SELECTORS.processedClass.remove}`;
@@ -1094,7 +1133,6 @@
       removeFilterFromElement(posterElement, 3);
     });
 
-    // debugger;
     // New from friends
     document.querySelectorAll(`.poster-container ${idMatch}:not(${removedSelector})`).forEach(posterElement => {
       removeFilterFromElement(posterElement, 1);
@@ -1119,34 +1157,34 @@
     });
   }
 
-  function saveBehaviorSettings(filterType, formRows) {
+  function saveBehaviorSettings(filterName, formRows) {
     const behaviorType = formRows[0].querySelector('select').value;
     log(DEBUG, 'behaviorType', behaviorType);
 
-    GMC.set(`${filterType}BehaviorType`, behaviorType);
+    GMC.set(`${filterName}BehaviorType`, behaviorType);
 
-    updateBehaviorCSSVariables(filterType, behaviorType);
+    updateBehaviorCSSVariables(filterName, behaviorType);
 
     if (behaviorType === 'Fade') {
       const behaviorFadeAmount = formRows[1].querySelector('select').value;
       log(DEBUG, 'behaviorFadeAmount', behaviorFadeAmount);
 
-      GMC.set(`${filterType}BehaviorFadeAmount`, behaviorFadeAmount);
+      GMC.set(`${filterName}BehaviorFadeAmount`, behaviorFadeAmount);
     } else if (behaviorType === 'Blur') {
       const behaviorBlurAmount = formRows[2].querySelector('select').value;
       log(DEBUG, 'behaviorBlurAmount', behaviorBlurAmount);
 
-      GMC.set(`${filterType}BehaviorBlurAmount`, behaviorBlurAmount);
+      GMC.set(`${filterName}BehaviorBlurAmount`, behaviorBlurAmount);
     } else if (behaviorType.includes('Replace')) {
       const behaviorReplaceValue = formRows[3].querySelector('input').value;
       log(DEBUG, 'behaviorReplaceValue', behaviorReplaceValue);
 
-      GMC.set(`${filterType}BehaviorReplaceValue`, behaviorReplaceValue);
+      GMC.set(`${filterName}BehaviorReplaceValue`, behaviorReplaceValue);
     } else if (behaviorType === 'Custom') {
       const behaviorCustomValue = formRows[4].querySelector('input').value;
       log(DEBUG, 'behaviorCustomValue', behaviorCustomValue);
 
-      GMC.set(`${filterType}BehaviorCustomValue`, behaviorCustomValue);
+      GMC.set(`${filterName}BehaviorCustomValue`, behaviorCustomValue);
     }
 
     GMC.save();
@@ -1157,30 +1195,30 @@
     return GMC.save();
   }
 
-  function updateBehaviorCSSVariables(filterType, behaviorType) {
+  function updateBehaviorCSSVariables(filterName, behaviorType) {
     log(DEBUG, 'updateBehaviorTypeVariable()');
 
     const fadeValue = behaviorType === 'Fade' ? 'block' : 'none';
     document.documentElement.style.setProperty(
-      `--filterboxd-${filterType}-behavior-fade`,
+      `--filterboxd-${filterName}-behavior-fade`,
       fadeValue,
     );
 
     const blurValue = behaviorType === 'Blur' ? 'block' : 'none';
     document.documentElement.style.setProperty(
-      `--filterboxd-${filterType}-behavior-blur`,
+      `--filterboxd-${filterName}-behavior-blur`,
       blurValue,
     );
 
     const replaceValue = behaviorType.includes('Replace') ? 'block' : 'none';
     document.documentElement.style.setProperty(
-      `--filterboxd-${filterType}-behavior-replace`,
+      `--filterboxd-${filterName}-behavior-replace`,
       replaceValue,
     );
 
     const customValue = behaviorType === 'Custom' ? 'block' : 'none';
     document.documentElement.style.setProperty(
-      `--filterboxd-${filterType}-behavior-custom`,
+      `--filterboxd-${filterName}-behavior-custom`,
       customValue,
     );
   }

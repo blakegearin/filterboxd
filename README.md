@@ -25,7 +25,7 @@ This is a [userscript](https://openuserjs.org/about/Userscript-Beginners-HOWTO) 
 ## Usage
 
 1. Install a userscript manager like [Tampermonkey](https://www.tampermonkey.net), [Violentmonkey](https://violentmonkey.github.io), or [Greasemonkey](https://addons.mozilla.org/en-US/firefox/addon/greasemonkey/)
-1. Go to [GreasyFork](https://greasyfork.org/en/scripts/519719-filterboxd)
+1. Go to [GreasyFork](https://greasyfork.org/en/scripts/519719-filterboxd) or [OpenUserJS](https://openuserjs.org/scripts/blakegearin/Filterboxd)
 1. The userscript will open in your userscript manager where you can install it
 1. Once installed, go here to view its configuration: [https://letterboxd.com/settings/?filterboxd](https://letterboxd.com/settings/?filterboxd)
 

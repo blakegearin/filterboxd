@@ -3,17 +3,19 @@
 // @namespace    https://github.com/blakegearin/filterboxd
 // @version      1.0.0
 // @description  Filter content on Letterboxd
-// @author       Blake Gearin
+// @author       Blake Gearin <hello@blakeg.me> (https://blakegearin.com)
 // @match        https://letterboxd.com/*
 // @require      https://openuserjs.org/src/libs/sizzle/GM_config.js
 // @grant        GM.getValue
 // @grant        GM.setValue
-// @license      MIT
 // @icon         https://raw.githubusercontent.com/blakegearin/filterboxd/main/img/logo.svg
 // @supportURL   https://github.com/blakegearin/filterboxd/issues
+// @license      MIT
+// @copyright    2024, Blake Gearin (https://blakegearin.com)
 // ==/UserScript==
 
-/*global GM_config*/
+/* jshint esversion: 6 */
+/* global GM_config */
 
 (function() {
   'use strict';

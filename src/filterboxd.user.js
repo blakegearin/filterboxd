@@ -797,13 +797,13 @@
 
     asideColumn.classList.add('col-12', 'overflow', 'col-right', 'js-hide-in-app');
 
-    // Filtered reviews
+    // Filter reviews
     const filteredReviewsTitle = document.createElement('h3');
     asideColumn.append(filteredReviewsTitle);
 
     filteredReviewsTitle.classList.add('title-3');
     filteredReviewsTitle.style.cssText = 'margin-top: 0em;';
-    filteredReviewsTitle.innerText = 'Filtered Reviews';
+    filteredReviewsTitle.innerText = 'Filter Reviews';
 
     const filteredReviewsUnorderedList = document.createElement('ul');
     asideColumn.append(filteredReviewsUnorderedList);
@@ -850,7 +850,7 @@
       reviewBehaviorsMetadata,
     );
 
-    // Filtered films
+    // Filter films
     const favoriteFilmsDiv = document.querySelector(SELECTORS.settings.favoriteFilms);
     const filteredFilmsDiv = favoriteFilmsDiv.cloneNode(true);
     tabPrimaryColumn.appendChild(filteredFilmsDiv);
@@ -858,7 +858,7 @@
     const posterList = filteredFilmsDiv.querySelector(SELECTORS.settings.posterList);
     posterList.remove();
 
-    filteredFilmsDiv.querySelector(SELECTORS.settings.subtitle).innerText = 'Filtered Films';
+    filteredFilmsDiv.querySelector(SELECTORS.settings.subtitle).innerText = 'Filter Films';
     filteredFilmsDiv.querySelector(SELECTORS.settings.note).innerText =
       'Right click to mark for removal.';
 
@@ -901,7 +901,7 @@
 
     formColumnsDiv.classList.add('form-columns', '-cols2');
 
-    // Filtered Films Behavior
+    // Filter films behavior
     const filmBehaviorsMetadata = {
       fade: {
         fieldName: 'filmBehaviorFadeAmount',

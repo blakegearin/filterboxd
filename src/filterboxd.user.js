@@ -161,6 +161,19 @@
       reviewClass: 'filterboxd-filter-review',
       reviewsWithSpoilers: '.film-detail:has(.contains-spoilers)',
     },
+    homepageSections: {
+      friendsHaveBeenWatching: 'h1.title-hero span',
+      newFromFriends: 'section#recent-from-friends',
+      popularWithFriends: 'section#popular-with-friends',
+      discoveryStream: 'section.section-discovery-stream',
+      latestNews: 'section#latest-news:not(:has(.teaser-grid))',
+      popularReviewsWithFriends: 'section#popular-reviews',
+      newListsFromFriends: 'section:has([href="/lists/friends/"])',
+      popularLists: 'section:has([href="/lists/popular/this/week/"])',
+      recentStories: 'section.stories-section',
+      recentShowdowns: 'section:has([href="/showdown/"])',
+      recentNews: 'section#latest-news:has(.teaser-grid)',
+    },
     processedClass: {
       apply: 'filterboxd-hide-processed',
       remove: 'filterboxd-unhide-processed',
@@ -299,6 +312,9 @@
     const reviewBehaviorReplaceValue = GMC.get('reviewBehaviorReplaceValue');
     log(VERBOSE, 'reviewBehaviorReplaceValue', reviewBehaviorReplaceValue);
 
+    const homepageFilter = getFilter('homepageFilter');
+    log(VERBOSE, 'homepageFilter', homepageFilter);
+
     modifyThenObserve(() => {
       filmFilter.forEach(filmMetadata => addFilterToFilm(filmMetadata));
 
@@ -316,6 +332,18 @@
           filteredTitleLink.classList.add(SELECTORS.filter.reviewClass);
         }
       });
+
+      const homepageSectionsToFilter = Object.keys(homepageFilter)
+        .filter(key => homepageFilter[key])
+        .map(key => SELECTORS.homepageSections[key])
+        .filter(Boolean);
+      log(VERBOSE, 'homepageSectionToFilter', homepageSectionsToFilter);
+
+      if (homepageSectionsToFilter.length) {
+        document.querySelectorAll(homepageSectionsToFilter.join(',')).forEach(homepageSection => {
+          homepageSection.style.display = 'none';
+        });
+      }
     });
   }
 
@@ -455,47 +483,56 @@
     ];
   }
 
-  function buildListItemToggle(labelText, checked, filterName, fieldName) {
-    const listItem = document.createElement('li');
-    listItem.classList.add('option');
+  function buildListItemToggles(filterName, unorderedList, listItemMetadata) {
+    log(DEBUG, 'buildListItemToggles()');
 
-    const label = document.createElement('label');
-    listItem.appendChild(label);
+    const filter = getFilter(filterName);
 
-    label.classList.add('option-label', '-toggle', 'switch-control');
+    listItemMetadata.forEach(metadata => {
+      const { name, description } = metadata;
+      const checked = filter[name] || false;
 
-    const labelSpan = document.createElement('span');
-    label.appendChild(labelSpan);
+      const listItem = document.createElement('li');
+      listItem.classList.add('option');
 
-    labelSpan.classList.add('label');
-    labelSpan.innerText = labelText;
+      const label = document.createElement('label');
+      listItem.appendChild(label);
 
-    const labelInput = document.createElement('input');
-    label.appendChild(labelInput);
+      label.classList.add('option-label', '-toggle', 'switch-control');
 
-    labelInput.classList.add('checkbox');
-    labelInput.setAttribute('type', 'checkbox');
-    labelInput.setAttribute('role', 'switch');
-    labelInput.setAttribute('data-filter-name', filterName);
-    labelInput.setAttribute('data-field-name', fieldName);
-    labelInput.checked = checked;
+      const labelSpan = document.createElement('span');
+      label.appendChild(labelSpan);
 
-    const labelCheckboxSpan = document.createElement('span');
-    label.appendChild(labelCheckboxSpan);
+      labelSpan.classList.add('label');
+      labelSpan.innerText = description;
 
-    labelCheckboxSpan.classList.add('state');
+      const labelInput = document.createElement('input');
+      label.appendChild(labelInput);
 
-    const checkboxTrackSpan = document.createElement('span');
-    labelCheckboxSpan.appendChild(checkboxTrackSpan);
+      labelInput.classList.add('checkbox');
+      labelInput.setAttribute('type', 'checkbox');
+      labelInput.setAttribute('role', 'switch');
+      labelInput.setAttribute('data-filter-name', filterName);
+      labelInput.setAttribute('data-field-name', name);
+      labelInput.checked = checked;
 
-    checkboxTrackSpan.classList.add('track');
+      const labelCheckboxSpan = document.createElement('span');
+      label.appendChild(labelCheckboxSpan);
 
-    const checkboxHandleSpan = document.createElement('span');
-    checkboxTrackSpan.appendChild(checkboxHandleSpan);
+      labelCheckboxSpan.classList.add('state');
 
-    checkboxHandleSpan.classList.add('handle');
+      const checkboxTrackSpan = document.createElement('span');
+      labelCheckboxSpan.appendChild(checkboxTrackSpan);
 
-    return listItem;
+      checkboxTrackSpan.classList.add('track');
+
+      const checkboxHandleSpan = document.createElement('span');
+      checkboxTrackSpan.appendChild(checkboxHandleSpan);
+
+      checkboxHandleSpan.classList.add('handle');
+
+      unorderedList.appendChild(listItem);
+    });
   }
 
   function buildUserscriptLink(userscriptListItem, addToListLink, addThisFilmLink) {
@@ -695,8 +732,8 @@
 
       setFilter('filmFilter', []);
       setFilter('reviewFilter', {});
+      setFilter('homepageFilter', {});
 
-      GMC.reset();
       GMC.save();
     }
 
@@ -799,58 +836,76 @@
 
     asideColumn.classList.add('col-12', 'overflow', 'col-right', 'js-hide-in-app');
 
-    // Filter reviews
-    const filteredReviewsTitle = document.createElement('h3');
-    asideColumn.append(filteredReviewsTitle);
+    // Filter homepage
+    const filteredHomepageTitle = document.createElement('h3');
+    asideColumn.append(filteredHomepageTitle);
 
-    filteredReviewsTitle.classList.add('title-3');
-    filteredReviewsTitle.style.cssText = 'margin-top: 0em;';
-    filteredReviewsTitle.innerText = 'Filter Reviews';
+    filteredHomepageTitle.classList.add('title-3');
+    filteredHomepageTitle.style.cssText = 'margin-top: 0em;';
+    filteredHomepageTitle.innerText = 'Filter Homepage';
 
-    const filteredReviewsUnorderedList = document.createElement('ul');
-    asideColumn.append(filteredReviewsUnorderedList);
+    const filteredHomepageUnorderedList = document.createElement('ul');
+    asideColumn.append(filteredHomepageUnorderedList);
 
-    filteredReviewsUnorderedList.classList.add('options-list', '-toggle-list', 'js-toggle-list');
+    filteredHomepageUnorderedList.classList.add('options-list', '-toggle-list', 'js-toggle-list');
 
-    const fieldName = 'spoilers';
-    const reviewFilter = getFilter('reviewFilter');
-    const checked = reviewFilter[fieldName] || false;
+    const homepageFilterItems = [
+      {
+        name: 'friendsHaveBeenWatching',
+        description: 'Remove "Here\'s what your friends have been watching..." title text',
+      },
+      {
+        name: 'newFromFriends',
+        description: 'Remove "New from friends" films section',
+      },
+      {
+        name: 'popularWithFriends',
+        description: 'Remove "Popular with friends" section',
+      },
+      {
+        name: 'discoveryStream',
+        description: 'Remove discovery section (e.g. festivals, competitions)',
+      },
+      {
+        name: 'latestNews',
+        description: 'Remove "Latest news" section',
+      },
+      {
+        name: 'popularReviewsWithFriends',
+        description: 'Remove "Popular reviews with friends" section',
+      },
+      {
+        name: 'newListsFromFriends',
+        description: 'Remove "New from friends" lists section',
+      },
+      {
+        name: 'popularLists',
+        description: 'Remove "Popular lists" section',
+      },
+      {
+        name: 'recentStories',
+        description: 'Remove "Recent stories" section',
+      },
+      {
+        name: 'recentShowdowns',
+        description: 'Remove "Recent showdowns" section',
+      },
+      {
+        name: 'recentNews',
+        description: 'Remove "Recent news" section',
+      },
+    ];
 
-    const spoilerListItem = buildListItemToggle(
-      'Filter reviews that contain spoilers',
-      checked,
-      'reviewFilter',
-      fieldName,
+    buildListItemToggles(
+      'homepageFilter',
+      filteredHomepageUnorderedList,
+      homepageFilterItems,
     );
 
-    filteredReviewsUnorderedList.appendChild(spoilerListItem);
+    let homepageColumnsDiv = document.createElement('div');
+    asideColumn.appendChild(homepageColumnsDiv);
 
-    let reviewColumnsDiv = document.createElement('div');
-    asideColumn.appendChild(reviewColumnsDiv);
-
-    reviewColumnsDiv.classList.add('form-columns', '-cols2');
-
-    const reviewBehaviorsMetadata = {
-      fade: {
-        fieldName: 'reviewBehaviorFadeAmount',
-      },
-      blur: {
-        fieldName: 'reviewBehaviorBlurAmount',
-      },
-      replace: {
-        fieldName: 'reviewBehaviorReplaceValue',
-        labelText: 'Text',
-      },
-      custom: {
-        fieldName: 'reviewBehaviorCustomValue',
-      },
-    };
-    const reviewFormRows = buildBehaviorFormRows(
-      reviewColumnsDiv,
-      'review',
-      REVIEW_BEHAVIORS,
-      reviewBehaviorsMetadata,
-    );
+    homepageColumnsDiv.classList.add('form-columns', '-cols2');
 
     // Filter films
     const favoriteFilmsDiv = document.querySelector(SELECTORS.settings.favoriteFilms);
@@ -929,6 +984,60 @@
     const clearDiv = filteredFilmsDiv.querySelector(SELECTORS.settings.clear);
     clearDiv.remove();
 
+    // Filter reviews
+    const filteredReviewsTitle = document.createElement('h3');
+    tabPrimaryColumn.append(filteredReviewsTitle);
+
+    filteredReviewsTitle.classList.add('title-3');
+    filteredReviewsTitle.style.cssText = 'margin-top: 0em;';
+    filteredReviewsTitle.innerText = 'Filter Reviews';
+
+    const filteredReviewsUnorderedList = document.createElement('ul');
+    tabPrimaryColumn.append(filteredReviewsUnorderedList);
+
+    filteredReviewsUnorderedList.classList.add('options-list', '-toggle-list', 'js-toggle-list');
+
+    const reviewFilterItems = [
+      {
+        name: 'spoilers',
+        description: 'Filter reviews that contain spoilers',
+      },
+    ];
+
+    buildListItemToggles(
+      'reviewFilter',
+      filteredReviewsUnorderedList,
+      reviewFilterItems,
+    );
+
+    let reviewColumnsDiv = document.createElement('div');
+    tabPrimaryColumn.appendChild(reviewColumnsDiv);
+
+    reviewColumnsDiv.classList.add('form-columns', '-cols2');
+
+    const reviewBehaviorsMetadata = {
+      fade: {
+        fieldName: 'reviewBehaviorFadeAmount',
+      },
+      blur: {
+        fieldName: 'reviewBehaviorBlurAmount',
+      },
+      replace: {
+        fieldName: 'reviewBehaviorReplaceValue',
+        labelText: 'Text',
+      },
+      custom: {
+        fieldName: 'reviewBehaviorCustomValue',
+      },
+    };
+    const reviewFormRows = buildBehaviorFormRows(
+      reviewColumnsDiv,
+      'review',
+      REVIEW_BEHAVIORS,
+      reviewBehaviorsMetadata,
+    );
+
+    // Save changes
     let buttonsRowDiv = document.createElement('div');
     userscriptTabDiv.appendChild(buttonsRowDiv);
 
@@ -1266,6 +1375,10 @@
       filmFilter: {
         type: 'text',
         default: JSON.stringify([]),
+      },
+      homepageFilter: {
+        type: 'text',
+        default: JSON.stringify({}),
       },
       logLevel: {
         type: 'select',

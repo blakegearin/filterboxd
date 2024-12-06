@@ -156,23 +156,52 @@
       addToList: '.film-poster-popmenu .menu-item-add-to-list',
       addThisFilm: '.film-poster-popmenu .menu-item-add-this-film',
     },
+    filmPageSections: {
+      backdropImage: 'body.film .backdrop-container',
+      // Left column
+      poster: '#film-page-wrapper section.poster-list a[data-js-trigger="postermodal"]',
+      stats: '#film-page-wrapper section.poster-list ul.film-stats',
+      whereToWatch: '#film-page-wrapper section.watch-panel',
+      // Right column
+      userActionsPanel: '#film-page-wrapper section#userpanel',
+      ratings: '#film-page-wrapper section.ratings-histogram-chart',
+      // Middle column
+      releaseYear: '#film-page-wrapper .details .releaseyear',
+      director: '#film-page-wrapper .details .credits',
+      tagline: '#film-page-wrapper .tagline',
+      description: '#film-page-wrapper .truncate',
+      castTab: '#film-page-wrapper #tabbed-content ul li:nth-of-type(1),#film-page-wrapper #tab-cast',
+      crewTab: '#film-page-wrapper #tabbed-content ul li:nth-of-type(2),#film-page-wrapper #tab-crew',
+      detailsTab: '#film-page-wrapper #tabbed-content ul li:nth-of-type(3),#film-page-wrapper #tab-details',
+      genresTab: '#film-page-wrapper #tabbed-content ul li:nth-of-type(4),#film-page-wrapper #tab-genres',
+      releasesTab: '#film-page-wrapper #tabbed-content ul li:nth-of-type(5),#film-page-wrapper #tab-releases',
+      activityFromFriends: '#film-page-wrapper section.activity-from-friends',
+      filmNews: '#film-page-wrapper section.film-news',
+      reviewsFromFriends: '#film-page-wrapper section#popular-reviews-with-friends',
+      popularReviews: '#film-page-wrapper section#popular-reviews',
+      recentReviews: '#film-page-wrapper section#recent-reviews',
+      relatedFilms: '#film-page-wrapper section#related',
+      similarFilms: '#film-page-wrapper section.related-films:not(#related)',
+      mentionedBy: '#film-page-wrapper section#film-hq-mentions',
+      popularLists: '#film-page-wrapper section:has(#film-popular-lists)',
+    },
     filter: {
       filmClass: 'filterboxd-filter-film',
       reviewClass: 'filterboxd-filter-review',
       reviewsWithSpoilers: '.film-detail:has(.contains-spoilers)',
     },
     homepageSections: {
-      friendsHaveBeenWatching: 'h1.title-hero span',
-      newFromFriends: 'section#recent-from-friends',
-      popularWithFriends: 'section#popular-with-friends',
-      discoveryStream: 'section.section-discovery-stream',
-      latestNews: 'section#latest-news:not(:has(.teaser-grid))',
-      popularReviewsWithFriends: 'section#popular-reviews',
-      newListsFromFriends: 'section:has([href="/lists/friends/"])',
-      popularLists: 'section:has([href="/lists/popular/this/week/"])',
-      recentStories: 'section.stories-section',
-      recentShowdowns: 'section:has([href="/showdown/"])',
-      recentNews: 'section#latest-news:has(.teaser-grid)',
+      friendsHaveBeenWatching: '.person-home h1.title-hero span',
+      newFromFriends: '.person-home section#recent-from-friends',
+      popularWithFriends: '.person-home section#popular-with-friends',
+      discoveryStream: '.person-home section.section-discovery-stream',
+      latestNews: '.person-home section#latest-news:not(:has(.teaser-grid))',
+      popularReviewsWithFriends: '.person-home section#popular-reviews',
+      newListsFromFriends: '.person-home section:has([href="/lists/friends/"])',
+      popularLists: '.person-home section:has([href="/lists/popular/this/week/"])',
+      recentStories: '.person-home section.stories-section',
+      recentShowdowns: '.person-home section:has([href="/showdown/"])',
+      recentNews: '.person-home section#latest-news:has(.teaser-grid)',
     },
     processedClass: {
       apply: 'filterboxd-hide-processed',
@@ -315,6 +344,9 @@
     const homepageFilter = getFilter('homepageFilter');
     log(VERBOSE, 'homepageFilter', homepageFilter);
 
+    const filmPageFilter = getFilter('filmPageFilter');
+    log(VERBOSE, 'filmPageFilter', filmPageFilter);
+
     modifyThenObserve(() => {
       filmFilter.forEach(filmMetadata => addFilterToFilm(filmMetadata));
 
@@ -333,16 +365,31 @@
         }
       });
 
+      const sectionsToFilter = [];
+
       const homepageSectionsToFilter = Object.keys(homepageFilter)
         .filter(key => homepageFilter[key])
         .map(key => SELECTORS.homepageSections[key])
         .filter(Boolean);
       log(VERBOSE, 'homepageSectionToFilter', homepageSectionsToFilter);
 
-      if (homepageSectionsToFilter.length) {
-        document.querySelectorAll(homepageSectionsToFilter.join(',')).forEach(homepageSection => {
-          homepageSection.style.display = 'none';
+      const filmPageSectionsToFilter = Object.keys(filmPageFilter)
+        .filter(key => filmPageFilter[key])
+        .map(key => SELECTORS.filmPageSections[key])
+        .filter(Boolean);
+      log(VERBOSE, 'filmPageSectionsToFilter', filmPageSectionsToFilter);
+
+      sectionsToFilter.push(...homepageSectionsToFilter);
+      sectionsToFilter.push(...filmPageSectionsToFilter);
+
+      if (sectionsToFilter.length) {
+        document.querySelectorAll(sectionsToFilter.join(',')).forEach(filterSection => {
+          filterSection.style.display = 'none';
         });
+      }
+
+      if (filmPageFilter.backdropImage) {
+        document.querySelector('#content.-backdrop')?.classList.remove('-backdrop');
       }
     });
   }
@@ -483,13 +530,24 @@
     ];
   }
 
-  function buildListItemToggles(filterName, unorderedList, listItemMetadata) {
+  function buildToggleSectionListItems(filterName, unorderedList, listItemMetadata) {
     log(DEBUG, 'buildListItemToggles()');
 
     const filter = getFilter(filterName);
 
     listItemMetadata.forEach(metadata => {
-      const { name, description } = metadata;
+      const { type, name, description } = metadata;
+
+      if (type === 'label') {
+        const label = document.createElement('label');
+        unorderedList.appendChild(label);
+
+        label.innerText = description;
+        label.style.cssText = 'margin: 1em 0em;';
+
+        return;
+      }
+
       const checked = filter[name] || false;
 
       const listItem = document.createElement('li');
@@ -590,6 +648,36 @@
     userscriptLink.removeAttribute('class');
 
     return userscriptListItem;
+  }
+
+  function buildToggleSection(parentElement, sectionTitle, filerName, sectionMetadata) {
+    const formRowDiv = document.createElement('div');
+    parentElement.appendChild(formRowDiv);
+
+    formRowDiv.style.cssText = 'margin-bottom: 40px;';
+
+    const sectionHeader = document.createElement('h3');
+    formRowDiv.append(sectionHeader);
+
+    sectionHeader.classList.add('title-3');
+    sectionHeader.style.cssText = 'margin-top: 0em;';
+    sectionHeader.innerText = sectionTitle;
+
+    const unorderedList = document.createElement('ul');
+    formRowDiv.append(unorderedList);
+
+    unorderedList.classList.add('options-list', '-toggle-list', 'js-toggle-list');
+
+    buildToggleSectionListItems(
+      filerName,
+      unorderedList,
+      sectionMetadata,
+    );
+
+    let formColumnDiv = document.createElement('div');
+    formRowDiv.appendChild(formColumnDiv);
+
+    formColumnDiv.classList.add('form-columns', '-cols2');
   }
 
   function createFormRow({
@@ -837,19 +925,7 @@
     asideColumn.classList.add('col-12', 'overflow', 'col-right', 'js-hide-in-app');
 
     // Filter homepage
-    const filteredHomepageTitle = document.createElement('h3');
-    asideColumn.append(filteredHomepageTitle);
-
-    filteredHomepageTitle.classList.add('title-3');
-    filteredHomepageTitle.style.cssText = 'margin-top: 0em;';
-    filteredHomepageTitle.innerText = 'Filter Homepage';
-
-    const filteredHomepageUnorderedList = document.createElement('ul');
-    asideColumn.append(filteredHomepageUnorderedList);
-
-    filteredHomepageUnorderedList.classList.add('options-list', '-toggle-list', 'js-toggle-list');
-
-    const homepageFilterItems = [
+    const homepageFilterMetadata = [
       {
         name: 'friendsHaveBeenWatching',
         description: 'Remove "Here\'s what your friends have been watching..." title text',
@@ -896,16 +972,155 @@
       },
     ];
 
-    buildListItemToggles(
+    buildToggleSection(
+      asideColumn,
+      'Filter Homepage',
       'homepageFilter',
-      filteredHomepageUnorderedList,
-      homepageFilterItems,
+      homepageFilterMetadata,
     );
 
-    let homepageColumnsDiv = document.createElement('div');
-    asideColumn.appendChild(homepageColumnsDiv);
+    // Filter film page
+    const filmPageFilterMetadata = [
+      {
+        type: 'toggle',
+        name: 'backdropImage',
+        description: 'Remove backdrop image',
+      },
+      {
+        type: 'label',
+        description: 'Left column',
+      },
+      {
+        type: 'toggle',
+        name: 'poster',
+        description: 'Remove poster',
+      },
+      {
+        type: 'toggle',
+        name: 'stats',
+        description: 'Remove Letterboxd stats',
+      },
+      {
+        type: 'toggle',
+        name: 'whereToWatch',
+        description: 'Remove "Where to watch" section',
+      },
+      {
+        type: 'label',
+        description: 'Right column',
+      },
+      {
+        type: 'toggle',
+        name: 'userActionsPanel',
+        description: 'Remove user actions panel',
+      },
+      {
+        type: 'toggle',
+        name: 'ratings',
+        description: 'Remove "Ratings" section',
+      },
+      {
+        type: 'label',
+        description: 'Middle column',
+      },
+      {
+        type: 'toggle',
+        name: 'releaseYear',
+        description: 'Remove release year text',
+      },
+      {
+        type: 'toggle',
+        name: 'director',
+        description: 'Remove director text',
+      },
+      {
+        type: 'toggle',
+        name: 'tagline',
+        description: 'Remove tagline text',
+      },
+      {
+        type: 'toggle',
+        name: 'description',
+        description: 'Remove description text',
+      },
+      {
+        type: 'toggle',
+        name: 'castTab',
+        description: 'Remove "Cast" tab',
+      },
+      {
+        type: 'toggle',
+        name: 'crewTab',
+        description: 'Remove "Crew" tab',
+      },
+      {
+        type: 'toggle',
+        name: 'detailsTab',
+        description: 'Remove "Details" tab',
+      },
+      {
+        type: 'toggle',
+        name: 'genresTab',
+        description: 'Remove "Genres" tab',
+      },
+      {
+        type: 'toggle',
+        name: 'releasesTab',
+        description: 'Remove "Releases" tab',
+      },
+      {
+        type: 'toggle',
+        name: 'activityFromFriends',
+        description: 'Remove "Activity from friends" section',
+      },
+      {
+        type: 'toggle',
+        name: 'filmNews',
+        description: 'Remove HQ film news section',
+      },
+      {
+        type: 'toggle',
+        name: 'reviewsFromFriends',
+        description: 'Remove "Reviews from friends" section',
+      },
+      {
+        type: 'toggle',
+        name: 'popularReviews',
+        description: 'Remove "Popular reviews" section',
+      },
+      {
+        type: 'toggle',
+        name: 'recentReviews',
+        description: 'Remove "Recent reviews" section',
+      },
+      {
+        type: 'toggle',
+        name: 'relatedFilms',
+        description: 'Remove "Related films" section',
+      },
+      {
+        type: 'toggle',
+        name: 'similarFilms',
+        description: 'Remove "Similar films" section',
+      },
+      {
+        type: 'toggle',
+        name: 'mentionedBy',
+        description: 'Remove "Mentioned by" section',
+      },
+      {
+        type: 'toggle',
+        name: 'popularLists',
+        description: 'Remove "Popular lists" section',
+      },
+    ];
 
-    homepageColumnsDiv.classList.add('form-columns', '-cols2');
+    buildToggleSection(
+      asideColumn,
+      'Filter Film Page',
+      'filmPageFilter',
+      filmPageFilterMetadata,
+    );
 
     // Filter films
     const favoriteFilmsDiv = document.querySelector(SELECTORS.settings.favoriteFilms);
@@ -1004,7 +1219,7 @@
       },
     ];
 
-    buildListItemToggles(
+    buildToggleSectionListItems(
       'reviewFilter',
       filteredReviewsUnorderedList,
       reviewFilterItems,
@@ -1375,6 +1590,10 @@
       filmFilter: {
         type: 'text',
         default: JSON.stringify([]),
+      },
+      filmPageFilter: {
+        type: 'text',
+        default: JSON.stringify({}),
       },
       homepageFilter: {
         type: 'text',

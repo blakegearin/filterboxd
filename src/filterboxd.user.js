@@ -78,37 +78,63 @@
     startObserving();
   }
 
-  function observeAndModify(mutationsList) {
-    log(VERBOSE, 'observeAndModify()');
-
+  function mutationsExceedsLimits() {
     if (IDLE_MUTATION_COUNT > MAX_IDLE_MUTATIONS) {
       // This is a failsafe to prevent infinite loops
       logError('MAX_IDLE_MUTATIONS exceeded');
       OBSERVER.disconnect();
 
-      return;
-    } else if (UPDATES_COUNT >= MAX_HEADER_UPDATES) {
+      return true;
+    } else if (ACTIVE_MUTATION_COUNT >= MAX_ACTIVE_MUTATIONS) {
       // This is a failsafe to prevent infinite loops
-      logError('MAX_HEADER_UPDATES exceeded');
+      logError('MAX_ACTIVE_MUTATIONS exceeded');
       OBSERVER.disconnect();
 
-      return;
+      return true;
     }
 
+    return false;
+  }
+
+  function observeAndModify(mutationsList) {
+    log(VERBOSE, 'observeAndModify()');
+
+    if (mutationsExceedsLimits()) return;
+
+    log(VERBOSE, 'mutationsList.length', mutationsList.length);
+
     for (const mutation of mutationsList) {
-      // Use header id to determine if updates have already been applied
       if (mutation.type !== 'childList') return;
 
       log(TRACE, 'mutation', mutation);
 
-      maybeAddListItemToSidebar();
-      const outcome = addListItemToPopMenu();
-      applyFilters();
+      let sidebarUpdated;
+      let popMenuUpdated;
+      let filtersApplied;
 
-      log(DEBUG, 'outcome', outcome);
+      modifyThenObserve(() => {
+        sidebarUpdated = maybeAddListItemToSidebar();
+        log(VERBOSE, 'sidebarUpdated', sidebarUpdated);
 
-      if (outcome === 'continue') continue;
-      if (outcome === 'break') break;
+        popMenuUpdated = addListItemToPopMenu();
+        log(VERBOSE, 'popMenuUpdated', popMenuUpdated);
+
+        filtersApplied = applyFilters();
+        log(VERBOSE, 'filtersApplied', filtersApplied);
+      });
+
+      const activeMutation = sidebarUpdated || popMenuUpdated || filtersApplied;
+      log(DEBUG, 'activeMutation', activeMutation);
+
+      if (activeMutation) {
+        ACTIVE_MUTATION_COUNT++;
+        log(VERBOSE, 'ACTIVE_MUTATION_COUNT', ACTIVE_MUTATION_COUNT);
+      } else {
+        IDLE_MUTATION_COUNT++;
+        log(VERBOSE, 'IDLE_MUTATION_COUNT', IDLE_MUTATION_COUNT);
+      }
+
+      if (mutationsExceedsLimits()) break;
     }
   }
 
@@ -130,8 +156,8 @@
     return `#${string}`;
   }
 
-  const MAX_IDLE_MUTATIONS = 100;
-  const MAX_HEADER_UPDATES = 100;
+  const MAX_IDLE_MUTATIONS = 1000;
+  const MAX_ACTIVE_MUTATIONS = 10000;
   const FILM_BEHAVIORS = [
     'Remove',
     'Fade',
@@ -148,7 +174,7 @@
   ];
 
   let IDLE_MUTATION_COUNT = 0;
-  let UPDATES_COUNT = 0;
+  let ACTIVE_MUTATION_COUNT = 0;
   let SELECTORS = {
     filmPosterPopMenu: {
       self: '.film-poster-popmenu',
@@ -233,30 +259,34 @@
 
     if (!filmPosterPopMenus) {
       log(`Selector ${SELECTORS.filmPosterPopMenu.self} not found`, DEBUG);
-      return 'break';
+      return false;
     }
 
+    let pageUpdated = false;
+
     filmPosterPopMenus.forEach(filmPosterPopMenu => {
-      const userscriptListItem = filmPosterPopMenu.querySelector(`.${SELECTORS.filmPosterPopMenu.userscriptListItemClass}`);
-      if (userscriptListItem) return;
+      const userscriptListItemPresent = filmPosterPopMenu.querySelector(
+        `.${SELECTORS.filmPosterPopMenu.userscriptListItemClass}`,
+      );
+      if (userscriptListItemPresent) return;
 
       const lastListItem = filmPosterPopMenu.querySelector('li:last-of-type');
 
       if (!lastListItem) {
         logError(`Selector ${SELECTORS.filmPosterPopMenu} li:last-of-type not found`);
-        return 'break';
+        return;
       }
 
       const addToListLink = filmPosterPopMenu.querySelector(SELECTORS.filmPosterPopMenu.addToList);
       if (!addToListLink) {
         logError(`Selector ${SELECTORS.filmPosterPopMenu.addToList} not found`);
-        return 'break';
+        return;
       }
 
       const addThisFilmLink = filmPosterPopMenu.querySelector(SELECTORS.filmPosterPopMenu.addThisFilm);
       if (!addThisFilmLink) {
         logError(`Selector ${SELECTORS.filmPosterPopMenu.addThisFilm} not found`);
-        return 'break';
+        return;
       }
 
       modifyThenObserve(() => {
@@ -266,13 +296,17 @@
         userscriptListItem = buildUserscriptLink(userscriptListItem, addToListLink, addThisFilmLink);
         lastListItem.parentNode.append(userscriptListItem);
       });
+
+      pageUpdated = true;
     });
 
-    return;
+    return pageUpdated;
   }
 
   function addFilterToFilm({ id, slug }) {
     log(DEBUG, 'addFilterToFilm()');
+
+    let pageUpdated = false;
 
     const idMatch = `[data-film-id="${id}"]`;
     let appliedSelector = `.${SELECTORS.processedClass.apply}`;
@@ -285,26 +319,36 @@
     // Activity page reviews
     document.querySelectorAll(`section.activity-row ${idMatch}`).forEach(posterElement => {
       applyFilterToFilm(posterElement, 3);
+
+      pageUpdated = true;
     });
 
     // Activity page likes
     document.querySelectorAll(`section.activity-row .activity-summary a[href*="${slug}"]:not(${appliedSelector})`).forEach(posterElement => {
       applyFilterToFilm(posterElement, 3);
+
+      pageUpdated = true;
     });
 
     // New from friends
     document.querySelectorAll(`.poster-container ${idMatch}:not(${appliedSelector})`).forEach(posterElement => {
       applyFilterToFilm(posterElement, 1);
+
+      pageUpdated = true;
     });
 
     // Reviews
     document.querySelectorAll(`.review-tile ${idMatch}:not(${appliedSelector})`).forEach(posterElement => {
       applyFilterToFilm(posterElement, 3);
+
+      pageUpdated = true;
     });
 
     // Diary
     document.querySelectorAll(`.td-film-details [data-original-img-src]${idMatch}:not(${appliedSelector})`).forEach(posterElement => {
       applyFilterToFilm(posterElement, 2);
+
+      pageUpdated = true;
     });
 
     // Popular with friends, competitions
@@ -313,7 +357,11 @@
     );
     remainingElements.forEach(posterElement => {
       applyFilterToFilm(posterElement, 0);
+
+      pageUpdated = true;
     });
+
+    return pageUpdated;
   }
 
   function addToHiddenTitles(filmMetadata) {
@@ -328,6 +376,8 @@
 
   function applyFilters() {
     log(DEBUG, 'applyFilters()');
+
+    let pageUpdated = false;
 
     const filmFilter = getFilter('filmFilter');
     log(VERBOSE, 'filmFilter', filmFilter);
@@ -348,7 +398,10 @@
     log(VERBOSE, 'filmPageFilter', filmPageFilter);
 
     modifyThenObserve(() => {
-      filmFilter.forEach(filmMetadata => addFilterToFilm(filmMetadata));
+      filmFilter.forEach(filmMetadata => {
+        const filmUpdated = addFilterToFilm(filmMetadata);
+        if (filmUpdated) pageUpdated = true;
+      });
 
       const reviewsToFilter = [];
 
@@ -363,6 +416,8 @@
         } else {
           filteredTitleLink.classList.add(SELECTORS.filter.reviewClass);
         }
+
+        pageUpdated = true;
       });
 
       const sectionsToFilter = [];
@@ -385,13 +440,18 @@
       if (sectionsToFilter.length) {
         document.querySelectorAll(sectionsToFilter.join(',')).forEach(filterSection => {
           filterSection.style.display = 'none';
+
+          pageUpdated = true;
         });
       }
 
       if (filmPageFilter.backdropImage) {
         document.querySelector('#content.-backdrop')?.classList.remove('-backdrop');
+        pageUpdated = true;
       }
     });
+
+    return pageUpdated;
   }
 
   function applyFilterToFilm(element, levelsUp = 0) {
@@ -878,10 +938,16 @@
     `;
     document.body.appendChild(userscriptStyle);
 
-    applyFilters();
-    maybeAddConfigurationToSettings();
+    const onSettingsPage = window.location.href.includes('/settings/');
+    log(VERBOSE, 'onSettingsPage', onSettingsPage);
 
-    startObserving();
+    if (onSettingsPage) {
+      maybeAddConfigurationToSettings();
+    }
+    else {
+      applyFilters();
+      startObserving();
+    }
   }
 
   function maybeAddConfigurationToSettings() {
@@ -891,12 +957,8 @@
     const configurationExists = document.querySelector(createId(userscriptTabId));
     log(VERBOSE, 'configurationExists', configurationExists);
 
-    const onSettingsPage = window.location.href.includes('/settings/');
-    log(VERBOSE, 'onSettingsPage', onSettingsPage);
-
-    if (!onSettingsPage || configurationExists) {
-      log(DEBUG, 'Not in settings or Filterboxd configuration tab is present');
-
+    if (configurationExists) {
+      log(DEBUG, 'Filterboxd configuration tab is present');
       return;
     }
 
@@ -1370,26 +1432,29 @@
     const tabSelected = urlParams.get('filterboxd') !== null;
     log(VERBOSE, 'tabSelected', tabSelected);
 
-    // TODO: Fix unreliability
     if (tabSelected) window.onload = () => userscriptSubNabLink.click();
   }
 
   function maybeAddListItemToSidebar() {
     log(DEBUG, 'maybeAddListItemToSidebar()');
 
-    if (document.querySelector(createId(SELECTORS.userpanel.userscriptListItemId))) return;
+    const userscriptListItemId = document.querySelector(createId(SELECTORS.userpanel.userscriptListItemId));
+    if (userscriptListItemId) {
+      log(DEBUG, 'Userscript list item already exists');
+      return false;
+    }
 
     const userpanel = document.querySelector(SELECTORS.userpanel.self);
 
     if (!userpanel) {
       log(INFO, 'Userpanel not found');
-      return;
+      return false;
     }
 
     const secondLastListItem = userpanel.querySelector('li:nth-last-child(2)');
     if (!secondLastListItem ) {
       log(INFO, 'Second last list item not found');
-      return;
+      return false;
     }
 
     let userscriptListItem = secondLastListItem.cloneNode(true);
@@ -1401,6 +1466,8 @@
     userscriptListItem = buildUserscriptLink(userscriptListItem, addToListLink, addThisFilmLink);
 
     secondLastListItem.parentNode.insertBefore(userscriptListItem, userpanel.querySelector('li:nth-last-of-type(1)'));
+
+    return true;
   }
 
   function removeFilterFromElement(element, levelsUp = 0) {

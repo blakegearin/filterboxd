@@ -22,6 +22,8 @@ This is a [userscript](https://openuserjs.org/about/Userscript-Beginners-HOWTO) 
 
 - [x] Customize how the filters work in settings
 
+- [x] Remove sections from the homepage and film page
+
 ## Usage
 
 1. Install a userscript manager like [Tampermonkey](https://www.tampermonkey.net), [Violentmonkey](https://violentmonkey.github.io), or [Greasemonkey](https://addons.mozilla.org/en-US/firefox/addon/greasemonkey/)
@@ -30,14 +32,6 @@ This is a [userscript](https://openuserjs.org/about/Userscript-Beginners-HOWTO) 
 1. Once installed, go here to view its configuration: [https://letterboxd.com/settings/?filterboxd](https://letterboxd.com/settings/?filterboxd)
 
 ## Screenshots
-
-<p align="center">
-  <img
-    src="img/configuration.png"
-    alt="Screenshot of the Account Settings page on Letterboxd showing a new Filterboxd tab with configuration options"
-    title="Screenshot of the Account Settings page on Letterboxd showing a new Filterboxd tab with configuration options"
-  />
-</p>
 
 <p align="center">
   <img
@@ -55,6 +49,14 @@ This is a [userscript](https://openuserjs.org/about/Userscript-Beginners-HOWTO) 
     src="img/remove-example.png"
     alt="Screenshot showing the film page with the poster and backdrop image blurred and an option for 'Remove from filter' in the right sidebar for Filterboxd usage"
     title="Screenshot showing the film page with the poster and backdrop image blurred and an option for 'Remove from filter' in the right sidebar for Filterboxd usage"
+  />
+</p>
+
+<p align="center">
+  <img
+    src="img/configuration.png"
+    alt="Screenshot of the Account Settings page on Letterboxd showing a new Filterboxd tab with configuration options"
+    title="Screenshot of the Account Settings page on Letterboxd showing a new Filterboxd tab with configuration options"
   />
 </p>
 

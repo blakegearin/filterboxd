@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filterboxd
 // @namespace    https://github.com/blakegearin/filterboxd
-// @version      1.1.0
+// @version      1.1.1
 // @description  Filter content on Letterboxd
 // @author       Blake Gearin <hello@blakeg.me> (https://blakegearin.com)
 // @match        https://letterboxd.com/*

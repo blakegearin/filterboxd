@@ -183,7 +183,7 @@
       addThisFilm: '.film-poster-popmenu .menu-item-add-this-film',
     },
     filmPageSections: {
-      backdropImage: 'body.film .backdrop-container',
+      backdropImage: 'body.backdrop-loaded .backdrop-container',
       // Left column
       poster: '#film-page-wrapper section.poster-list a[data-js-trigger="postermodal"]',
       stats: '#film-page-wrapper section.poster-list ul.film-stats',
@@ -214,7 +214,13 @@
     filter: {
       filmClass: 'filterboxd-filter-film',
       reviewClass: 'filterboxd-filter-review',
-      reviewsWithSpoilers: '.film-detail:has(.contains-spoilers)',
+      reviews: {
+        ratings: '.film-detail .attribution .rating,.film-detail-meta .rating,.activity-summary .rating,.film-metadata .rating,.-rated .rating,.poster-viewingdata .rating',
+        likes: '.film-detail .attribution .icon-liked,.film-metadata .icon-liked,.review .like-link-target,.film-detail-content .like-link-target',
+        comments: '.film-detail .attribution .content-metadata,#content #comments',
+        withSpoilers: '.film-detail:has(.contains-spoilers)',
+        withoutRatings: '.film-detail:not(:has(.rating))',
+      },
     },
     homepageSections: {
       friendsHaveBeenWatching: '.person-home h1.title-hero span',
@@ -403,14 +409,22 @@
         if (filmUpdated) pageUpdated = true;
       });
 
-      const reviewsToFilter = [];
+      const selectorReviewElementsToFilter = [];
+      if (reviewFilter.ratings) selectorReviewElementsToFilter.push(SELECTORS.filter.reviews.ratings);
+      if (reviewFilter.likes) selectorReviewElementsToFilter.push(SELECTORS.filter.reviews.likes);
+      if (reviewFilter.comments) selectorReviewElementsToFilter.push(SELECTORS.filter.reviews.comments);
 
-      if (reviewFilter.spoilers) {
-        const reviewsWithSpoilers = document.querySelectorAll(SELECTORS.filter.reviewsWithSpoilers);
-        reviewsToFilter.push(...reviewsWithSpoilers);
-      }
+      document.querySelectorAll(selectorReviewElementsToFilter.join(',')).forEach(reviewElement => {
+        reviewElement.style.display = 'none';
 
-      reviewsToFilter.forEach(filteredTitleLink => {
+        pageUpdated = true;
+      });
+
+      const reviewsToFilterSelectors = [];
+      if (reviewFilter.withSpoilers) reviewsToFilterSelectors.push(SELECTORS.filter.reviews.withSpoilers);
+      if (reviewFilter.withoutRatings) reviewsToFilterSelectors.push(SELECTORS.filter.reviews.withoutRatings);
+
+      document.querySelectorAll(reviewsToFilterSelectors.join(',')).forEach(filteredTitleLink => {
         if (replaceBehavior) {
           filteredTitleLink.querySelector('.body-text').innerText = reviewBehaviorReplaceValue;
         } else {
@@ -1276,8 +1290,24 @@
 
     const reviewFilterItems = [
       {
-        name: 'spoilers',
+        name: 'ratings',
+        description: 'Remove ratings from reviews',
+      },
+      {
+        name: 'likes',
+        description: 'Remove likes from reviews',
+      },
+      {
+        name: 'comments',
+        description: 'Remove comments from reviews',
+      },
+      {
+        name: 'withSpoilers',
         description: 'Filter reviews that contain spoilers',
+      },
+      {
+        name: 'withoutRatings',
+        description: 'Filter reviews that don\'t have ratings',
       },
     ];
 
@@ -1454,6 +1484,11 @@
     const secondLastListItem = userpanel.querySelector('li:nth-last-child(2)');
     if (!secondLastListItem ) {
       log(INFO, 'Second last list item not found');
+      return false;
+    }
+
+    if (secondLastListItem.classList.contains('loading-csi')) {
+      log(INFO, 'Second last list item is loading');
       return false;
     }
 

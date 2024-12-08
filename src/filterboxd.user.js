@@ -414,25 +414,29 @@
       if (reviewFilter.likes) selectorReviewElementsToFilter.push(SELECTORS.filter.reviews.likes);
       if (reviewFilter.comments) selectorReviewElementsToFilter.push(SELECTORS.filter.reviews.comments);
 
-      document.querySelectorAll(selectorReviewElementsToFilter.join(',')).forEach(reviewElement => {
-        reviewElement.style.display = 'none';
+      if (selectorReviewElementsToFilter.length) {
+        document.querySelectorAll(selectorReviewElementsToFilter.join(',')).forEach(reviewElement => {
+          reviewElement.style.display = 'none';
 
-        pageUpdated = true;
-      });
+          pageUpdated = true;
+        });
+      }
 
       const reviewsToFilterSelectors = [];
       if (reviewFilter.withSpoilers) reviewsToFilterSelectors.push(SELECTORS.filter.reviews.withSpoilers);
       if (reviewFilter.withoutRatings) reviewsToFilterSelectors.push(SELECTORS.filter.reviews.withoutRatings);
 
-      document.querySelectorAll(reviewsToFilterSelectors.join(',')).forEach(filteredTitleLink => {
-        if (replaceBehavior) {
-          filteredTitleLink.querySelector('.body-text').innerText = reviewBehaviorReplaceValue;
-        } else {
-          filteredTitleLink.classList.add(SELECTORS.filter.reviewClass);
-        }
+      if (reviewsToFilterSelectors.length) {
+        document.querySelectorAll(reviewsToFilterSelectors.join(',')).forEach(filteredTitleLink => {
+          if (replaceBehavior) {
+            filteredTitleLink.querySelector('.body-text').innerText = reviewBehaviorReplaceValue;
+          } else {
+            filteredTitleLink.classList.add(SELECTORS.filter.reviewClass);
+          }
 
-        pageUpdated = true;
-      });
+          pageUpdated = true;
+        });
+      }
 
       const sectionsToFilter = [];
 
@@ -1000,61 +1004,6 @@
 
     asideColumn.classList.add('col-12', 'overflow', 'col-right', 'js-hide-in-app');
 
-    // Filter homepage
-    const homepageFilterMetadata = [
-      {
-        name: 'friendsHaveBeenWatching',
-        description: 'Remove "Here\'s what your friends have been watching..." title text',
-      },
-      {
-        name: 'newFromFriends',
-        description: 'Remove "New from friends" films section',
-      },
-      {
-        name: 'popularWithFriends',
-        description: 'Remove "Popular with friends" section',
-      },
-      {
-        name: 'discoveryStream',
-        description: 'Remove discovery section (e.g. festivals, competitions)',
-      },
-      {
-        name: 'latestNews',
-        description: 'Remove "Latest news" section',
-      },
-      {
-        name: 'popularReviewsWithFriends',
-        description: 'Remove "Popular reviews with friends" section',
-      },
-      {
-        name: 'newListsFromFriends',
-        description: 'Remove "New from friends" lists section',
-      },
-      {
-        name: 'popularLists',
-        description: 'Remove "Popular lists" section',
-      },
-      {
-        name: 'recentStories',
-        description: 'Remove "Recent stories" section',
-      },
-      {
-        name: 'recentShowdowns',
-        description: 'Remove "Recent showdowns" section',
-      },
-      {
-        name: 'recentNews',
-        description: 'Remove "Recent news" section',
-      },
-    ];
-
-    buildToggleSection(
-      asideColumn,
-      'Filter Homepage',
-      'homepageFilter',
-      homepageFilterMetadata,
-    );
-
     // Filter film page
     const filmPageFilterMetadata = [
       {
@@ -1193,7 +1142,7 @@
 
     buildToggleSection(
       asideColumn,
-      'Filter Film Page',
+      'Film Page Filter',
       'filmPageFilter',
       filmPageFilterMetadata,
     );
@@ -1203,10 +1152,12 @@
     const filteredFilmsDiv = favoriteFilmsDiv.cloneNode(true);
     tabPrimaryColumn.appendChild(filteredFilmsDiv);
 
+    filteredFilmsDiv.style.cssText = 'margin-bottom: 20px;';
+
     const posterList = filteredFilmsDiv.querySelector(SELECTORS.settings.posterList);
     posterList.remove();
 
-    filteredFilmsDiv.querySelector(SELECTORS.settings.subtitle).innerText = 'Filter Films';
+    filteredFilmsDiv.querySelector(SELECTORS.settings.subtitle).innerText = 'Films Filter';
     filteredFilmsDiv.querySelector(SELECTORS.settings.note).innerText =
       'Right click to mark for removal.';
 
@@ -1276,15 +1227,20 @@
     clearDiv.remove();
 
     // Filter reviews
+    const filteredReviewsFormRow = document.createElement('div');
+    tabPrimaryColumn.append(filteredReviewsFormRow);
+
+    filteredReviewsFormRow.classList.add('form-row');
+
     const filteredReviewsTitle = document.createElement('h3');
-    tabPrimaryColumn.append(filteredReviewsTitle);
+    filteredReviewsFormRow.append(filteredReviewsTitle);
 
     filteredReviewsTitle.classList.add('title-3');
     filteredReviewsTitle.style.cssText = 'margin-top: 0em;';
-    filteredReviewsTitle.innerText = 'Filter Reviews';
+    filteredReviewsTitle.innerText = 'Reviews Filter';
 
     const filteredReviewsUnorderedList = document.createElement('ul');
-    tabPrimaryColumn.append(filteredReviewsUnorderedList);
+    filteredReviewsFormRow.append(filteredReviewsUnorderedList);
 
     filteredReviewsUnorderedList.classList.add('options-list', '-toggle-list', 'js-toggle-list');
 
@@ -1318,7 +1274,7 @@
     );
 
     let reviewColumnsDiv = document.createElement('div');
-    tabPrimaryColumn.appendChild(reviewColumnsDiv);
+    filteredReviewsFormRow.appendChild(reviewColumnsDiv);
 
     reviewColumnsDiv.classList.add('form-columns', '-cols2');
 
@@ -1342,6 +1298,61 @@
       'review',
       REVIEW_BEHAVIORS,
       reviewBehaviorsMetadata,
+    );
+
+    // Filter homepage
+    const homepageFilterMetadata = [
+      {
+        name: 'friendsHaveBeenWatching',
+        description: 'Remove "Here\'s what your friends have been watching..." title text',
+      },
+      {
+        name: 'newFromFriends',
+        description: 'Remove "New from friends" films section',
+      },
+      {
+        name: 'popularWithFriends',
+        description: 'Remove "Popular with friends" section',
+      },
+      {
+        name: 'discoveryStream',
+        description: 'Remove discovery section (e.g. festivals, competitions)',
+      },
+      {
+        name: 'latestNews',
+        description: 'Remove "Latest news" section',
+      },
+      {
+        name: 'popularReviewsWithFriends',
+        description: 'Remove "Popular reviews with friends" section',
+      },
+      {
+        name: 'newListsFromFriends',
+        description: 'Remove "New from friends" lists section',
+      },
+      {
+        name: 'popularLists',
+        description: 'Remove "Popular lists" section',
+      },
+      {
+        name: 'recentStories',
+        description: 'Remove "Recent stories" section',
+      },
+      {
+        name: 'recentShowdowns',
+        description: 'Remove "Recent showdowns" section',
+      },
+      {
+        name: 'recentNews',
+        description: 'Remove "Recent news" section',
+      },
+    ];
+
+    buildToggleSection(
+      tabPrimaryColumn,
+      'Homepage Filter',
+      'homepageFilter',
+      homepageFilterMetadata,
     );
 
     // Save changes

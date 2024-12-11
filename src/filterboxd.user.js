@@ -1210,7 +1210,7 @@
       },
       replace: {
         fieldName: 'filmBehaviorReplaceValue',
-        labelText: 'URL',
+        labelText: 'Direct image URL',
       },
       custom: {
         fieldName: 'filmBehaviorCustomValue',
@@ -1698,7 +1698,7 @@
       },
       filmBehaviorReplaceValue: {
         type: 'text',
-        default: 'https://a.ltrbxd.com/resized/film-poster/4/8/7/9/1/48791-bee-movie-0-230-0-345-crop.jpg?v=2b9ece5cba',
+        default: 'https://raw.githubusercontent.com/blakegearin/filterboxd/main/img/bee-movie.jpg',
       },
       filmFilter: {
         type: 'text',

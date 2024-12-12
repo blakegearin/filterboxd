@@ -138,6 +138,12 @@
     }
   }
 
+  // Source: https://stackoverflow.com/a/21144505/5988852
+  function countWords(string) {
+    var matches = string.match(/[\w\d’'-]+/gi);
+    return matches ? matches.length : 0;
+  }
+
   function createId(string) {
     log(TRACE, 'createId()');
 
@@ -172,6 +178,8 @@
     'Replace text',
     'Custom',
   ];
+  const COLUMN_ONE_WIDTH = '33%';
+  const COLUMN_TWO_WIDTH = '64.8%';
 
   let IDLE_MUTATION_COUNT = 0;
   let ACTIVE_MUTATION_COUNT = 0;
@@ -414,6 +422,8 @@
       if (reviewFilter.likes) selectorReviewElementsToFilter.push(SELECTORS.filter.reviews.likes);
       if (reviewFilter.comments) selectorReviewElementsToFilter.push(SELECTORS.filter.reviews.comments);
 
+      log(VERBOSE, 'selectorReviewElementsToFilter', selectorReviewElementsToFilter);
+
       if (selectorReviewElementsToFilter.length) {
         document.querySelectorAll(selectorReviewElementsToFilter.join(',')).forEach(reviewElement => {
           reviewElement.style.display = 'none';
@@ -426,13 +436,35 @@
       if (reviewFilter.withSpoilers) reviewsToFilterSelectors.push(SELECTORS.filter.reviews.withSpoilers);
       if (reviewFilter.withoutRatings) reviewsToFilterSelectors.push(SELECTORS.filter.reviews.withoutRatings);
 
+      log(VERBOSE, 'reviewsToFilterSelectors', reviewsToFilterSelectors);
+
       if (reviewsToFilterSelectors.length) {
-        document.querySelectorAll(reviewsToFilterSelectors.join(',')).forEach(filteredTitleLink => {
+        document.querySelectorAll(reviewsToFilterSelectors.join(',')).forEach(review => {
           if (replaceBehavior) {
-            filteredTitleLink.querySelector('.body-text').innerText = reviewBehaviorReplaceValue;
-          } else {
-            filteredTitleLink.classList.add(SELECTORS.filter.reviewClass);
+            review.querySelector('.body-text').innerText = reviewBehaviorReplaceValue;
           }
+
+          review.classList.add(SELECTORS.filter.reviewClass);
+
+          pageUpdated = true;
+        });
+      }
+
+      if (reviewFilter.byWordCount) {
+        const reviewMinimumWordCount = getFilter('reviewMinimumWordCount');
+        log(VERBOSE, 'reviewMinimumWordCount', reviewMinimumWordCount);
+
+        document.querySelectorAll('.film-detail:not(.filterboxd-filter-review)').forEach(review => {
+          const reviewText = review.querySelector('.body-text').innerText;
+          log(VERBOSE, 'reviewText', reviewText);
+
+          if (countWords(reviewText) >= reviewMinimumWordCount) return;
+
+          if (replaceBehavior) {
+            review.querySelector('.body-text').innerText = reviewBehaviorReplaceValue;
+          }
+
+          review.classList.add(SELECTORS.filter.reviewClass);
 
           pageUpdated = true;
         });
@@ -523,11 +555,8 @@
       updateBehaviorCSSVariables(filterName, filmBehaviorType);
     };
 
-    const columnOneWidth = '33%';
-    const columnTwoWidth = '64.8%';
-
     const behaviorFormRow = createFormRow({
-      formRowStyle: `width: ${columnOneWidth};`,
+      formRowStyle: `width: ${COLUMN_ONE_WIDTH};`,
       labelText: 'Behavior',
       inputValue: behaviorValue,
       inputType: 'select',
@@ -543,7 +572,7 @@
 
     const fadeAmountFormRow = createFormRow({
       formRowClass: ['update-details'],
-      formRowStyle: `width: ${columnTwoWidth}; float: right; display: var(--filterboxd-${filterName}-behavior-fade);`,
+      formRowStyle: `width: ${COLUMN_TWO_WIDTH}; float: right; display: var(--filterboxd-${filterName}-behavior-fade);`,
       labelText: 'Amount',
       inputValue: behaviorFadeAmount,
       inputType: 'select',
@@ -561,7 +590,7 @@
 
     const blurAmountFormRow = createFormRow({
       formRowClass: ['update-details'],
-      formRowStyle: `width: ${columnTwoWidth}; float: right; display: var(--filterboxd-${filterName}-behavior-blur);`,
+      formRowStyle: `width: ${COLUMN_TWO_WIDTH}; float: right; display: var(--filterboxd-${filterName}-behavior-blur);`,
       labelText: 'Amount',
       inputValue: behaviorBlurAmount,
       inputType: 'select',
@@ -578,7 +607,7 @@
     log(DEBUG, 'behaviorReplaceValue', behaviorReplaceValue);
 
     const replaceValueFormRow = createFormRow({
-      formRowStyle: `width: ${columnTwoWidth}; float: right; display: var(--filterboxd-${filterName}-behavior-replace);`,
+      formRowStyle: `width: ${COLUMN_TWO_WIDTH}; float: right; display: var(--filterboxd-${filterName}-behavior-replace);`,
       labelText: behaviorsMetadata.replace.labelText,
       inputValue: behaviorReplaceValue,
       inputType: 'text',
@@ -591,7 +620,7 @@
     log(DEBUG, 'behaviorCustomValue', behaviorCustomValue);
 
     const cssFormRow = createFormRow({
-      formRowStyle: `width: ${columnTwoWidth}; float: right; display: var(--filterboxd-${filterName}-behavior-custom);`,
+      formRowStyle: `width: ${COLUMN_TWO_WIDTH}; float: right; display: var(--filterboxd-${filterName}-behavior-custom);`,
       labelText: 'CSS',
       inputValue: behaviorCustomValue,
       inputType: 'text',
@@ -1239,12 +1268,14 @@
     filteredReviewsTitle.style.cssText = 'margin-top: 0em;';
     filteredReviewsTitle.innerText = 'Reviews Filter';
 
-    const filteredReviewsUnorderedList = document.createElement('ul');
-    filteredReviewsFormRow.append(filteredReviewsUnorderedList);
+    // First unordered list
+    const filteredReviewsUnorderedListFirst = document.createElement('ul');
+    filteredReviewsFormRow.append(filteredReviewsUnorderedListFirst);
 
-    filteredReviewsUnorderedList.classList.add('options-list', '-toggle-list', 'js-toggle-list');
+    filteredReviewsUnorderedListFirst.classList.add('options-list', '-toggle-list', 'js-toggle-list');
+    filteredReviewsUnorderedListFirst.style.cssText += 'margin-bottom: 5px;';
 
-    const reviewFilterItems = [
+    const reviewFilterItemsFirst = [
       {
         name: 'ratings',
         description: 'Remove ratings from reviews',
@@ -1258,6 +1289,47 @@
         description: 'Remove comments from reviews',
       },
       {
+        name: 'byWordCount',
+        description: 'Filter reviews by minimum word count',
+      },
+    ];
+
+    buildToggleSectionListItems(
+      'reviewFilter',
+      filteredReviewsUnorderedListFirst,
+      reviewFilterItemsFirst,
+    );
+
+    // Minium word count
+    let minimumWordCountDiv = document.createElement('div');
+    filteredReviewsFormRow.appendChild(minimumWordCountDiv);
+
+    minimumWordCountDiv.classList.add('form-columns', '-cols2');
+
+    const minimumWordCountValue = GMC.get('reviewMinimumWordCount');
+    log(DEBUG, 'minimumWordCountValue', minimumWordCountValue);
+
+    const minimumWordCountFormRow = createFormRow({
+      formRowClass: ['update-details'],
+      formRowStyle: `width: ${COLUMN_TWO_WIDTH}; float: right; margin-bottom: 10px;`,
+      inputValue: minimumWordCountValue,
+      inputType: 'text',
+      inputStyle: 'width: 100px !important;',
+      notes: 'words',
+      notesStyle: 'width: 10px; margin-left: 14px;',
+    });
+
+    minimumWordCountDiv.appendChild(minimumWordCountFormRow);
+
+    // Second unordered list
+    const filteredReviewsUnorderedListSecond = document.createElement('ul');
+    filteredReviewsFormRow.append(filteredReviewsUnorderedListSecond);
+
+    filteredReviewsUnorderedListSecond.classList.add('options-list', '-toggle-list', 'js-toggle-list');
+    filteredReviewsUnorderedListSecond.style.cssText += 'margin: 0 0 1.53846154rem;';
+
+    const reviewFilterItemsSecond = [
+      {
         name: 'withSpoilers',
         description: 'Filter reviews that contain spoilers',
       },
@@ -1269,8 +1341,8 @@
 
     buildToggleSectionListItems(
       'reviewFilter',
-      filteredReviewsUnorderedList,
-      reviewFilterItems,
+      filteredReviewsUnorderedListSecond,
+      reviewFilterItemsSecond,
     );
 
     let reviewColumnsDiv = document.createElement('div');
@@ -1380,6 +1452,11 @@
         removeFromFilmFilter(filteredFilm);
         removalLink.remove();
       });
+
+      const minimumWordCountValue = minimumWordCountFormRow.querySelector('input').value;
+      log(DEBUG, 'minimumWordCountValue', minimumWordCountValue);
+
+      GMC.set('reviewMinimumWordCount', minimumWordCountValue);
 
       saveBehaviorSettings('film', filmFormRows);
       saveBehaviorSettings('review', reviewFormRows);
@@ -1747,6 +1824,10 @@
       reviewFilter: {
         type: 'text',
         default: JSON.stringify({}),
+      },
+      reviewMinimumWordCount: {
+        type: 'int',
+        default: 10,
       },
     },
   });

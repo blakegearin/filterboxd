@@ -573,11 +573,12 @@
     const fadeAmountFormRow = createFormRow({
       formRowClass: ['update-details'],
       formRowStyle: `width: ${COLUMN_TWO_WIDTH}; float: right; display: var(--filterboxd-${filterName}-behavior-fade);`,
-      labelText: 'Amount',
+      labelText: 'Opacity',
       inputValue: behaviorFadeAmount,
-      inputType: 'select',
+      inputType: 'number',
+      inputMin: 0,
+      inputMax: 100,
       inputStyle: 'width: 100px !important;',
-      selectArray: [ 0, 5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90],
       notes: '%',
       notesStyle: 'width: 10px; margin-left: 14px;',
     });
@@ -593,9 +594,9 @@
       formRowStyle: `width: ${COLUMN_TWO_WIDTH}; float: right; display: var(--filterboxd-${filterName}-behavior-blur);`,
       labelText: 'Amount',
       inputValue: behaviorBlurAmount,
-      inputType: 'select',
+      inputType: 'number',
+      inputMin: 1,
       inputStyle: 'width: 100px !important;',
-      selectArray: [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 1000 ],
       notes: 'px',
       notesStyle: 'width: 10px; margin-left: 14px;',
     });
@@ -793,6 +794,8 @@
     labelText = '',
     inputValue = '',
     inputType = 'text',
+    inputMin = null,
+    inputMax = null,
     inputStyle = '',
     selectArray = [],
     selectOnChange = () => {},
@@ -838,13 +841,16 @@
       });
 
       select.onchange = selectOnChange;
-    } else if (inputType === 'text') {
+    } else if (['text', 'number'].includes(inputType)) {
       const input = document.createElement('input');
       inputDiv.appendChild(input);
 
-      input.type = 'text';
+      input.type = inputType;
       input.classList.add('field');
       input.value = inputValue;
+
+      if (inputMin !== null) input.min = inputMin;
+      if (inputMax !== null) input.max = inputMax;
     }
 
     if (notes) {
@@ -1313,7 +1319,7 @@
       formRowClass: ['update-details'],
       formRowStyle: `width: ${COLUMN_TWO_WIDTH}; float: right; margin-bottom: 10px;`,
       inputValue: minimumWordCountValue,
-      inputType: 'text',
+      inputType: 'number',
       inputStyle: 'width: 100px !important;',
       notes: 'words',
       notesStyle: 'width: 10px; margin-left: 14px;',
@@ -1453,7 +1459,7 @@
         removalLink.remove();
       });
 
-      const minimumWordCountValue = minimumWordCountFormRow.querySelector('input').value;
+      const minimumWordCountValue = parseInt(minimumWordCountFormRow.querySelector('input').value || 0);
       log(DEBUG, 'minimumWordCountValue', minimumWordCountValue);
 
       GMC.set('reviewMinimumWordCount', minimumWordCountValue);

@@ -11,7 +11,7 @@
 // @icon         https://raw.githubusercontent.com/blakegearin/filterboxd/main/img/logo.svg
 // @supportURL   https://github.com/blakegearin/filterboxd/issues
 // @license      MIT
-// @copyright    2024, Blake Gearin (https://blakegearin.com)
+// @copyright    2024–2025, Blake Gearin (https://blakegearin.com)
 // ==/UserScript==
 
 /* jshint esversion: 6 */
@@ -29,7 +29,11 @@
   const VERBOSE = 4;
   const TRACE = 5;
 
+  // Default
   let CURRENT_LOG_LEVEL = INFO;
+
+  // Override
+  let LOG_LEVEL_OVERRIDE = null;
 
   const USERSCRIPT_NAME = 'Filterboxd';
 
@@ -56,6 +60,8 @@
       verbose: VERBOSE,
       trace: TRACE,
     }[GMC.get('logLevel')];
+
+    if (LOG_LEVEL_OVERRIDE) CURRENT_LOG_LEVEL = LOG_LEVEL_OVERRIDE;
   }
 
   function startObserving() {
@@ -522,6 +528,7 @@
       element.querySelector('img').srcset = filmBehaviorReplaceValue;
 
       element.classList.add(SELECTORS.processedClass.apply);
+      element.classList.remove(SELECTORS.processedClass.remove);
     } else {
       let target = element;
 
@@ -537,6 +544,7 @@
 
       target.classList.add(SELECTORS.filter.filmClass);
       element.classList.add(SELECTORS.processedClass.apply);
+      element.classList.remove(SELECTORS.processedClass.remove);
     }
   }
 
@@ -699,7 +707,9 @@
     const userscriptLink = userscriptListItem.firstElementChild;
     userscriptListItem.onclick = (event) => {
       event.preventDefault();
+
       log(DEBUG, 'userscriptListItem clicked');
+      log(VERBOSE, 'event', event);
 
       const link = event.target;
 
@@ -1591,7 +1601,11 @@
       return false;
     }
 
-    let userscriptListItem = secondLastListItem.cloneNode(true);
+    let userscriptListItem = document.createElement('li');
+    const userscriptListLink = document.createElement('a');
+    userscriptListItem.appendChild(userscriptListLink);
+    userscriptListLink.href = '#';
+
     userscriptListItem.setAttribute('id', SELECTORS.userpanel.userscriptListItemId);
 
     const unorderedList = userpanel.querySelector('ul');
@@ -1618,13 +1632,17 @@
 
     if (replaceBehavior) {
       const originalImgSrc = element.getAttribute('data-original-img-src');
-      if (!originalImgSrc) return;
+      if (!originalImgSrc) {
+        log(DEBUG, 'data-original-img-src attribute not found', element);
+        return;
+      }
 
       element.querySelector('img').src = originalImgSrc;
       element.querySelector('img').srcset = originalImgSrc;
 
       element.removeAttribute('data-original-img-src');
       element.classList.add(SELECTORS.processedClass.remove);
+      element.classList.remove(SELECTORS.processedClass.apply);
     } else {
       let target = element;
 
@@ -1640,6 +1658,7 @@
 
       target.classList.remove(SELECTORS.filter.filmClass);
       element.classList.add(SELECTORS.processedClass.remove);
+      element.classList.remove(SELECTORS.processedClass.apply);
     }
   }
 
@@ -1656,34 +1675,34 @@
     const idMatch = `[data-film-id="${id}"]`;
     let removedSelector = `.${SELECTORS.processedClass.remove}`;
 
-    // Activity page reviews
+    log(VERBOSE, 'Activity page reviews');
     document.querySelectorAll(`section.activity-row ${idMatch}`).forEach(posterElement => {
       removeFilterFromElement(posterElement, 3);
     });
 
-    // Activity page likes
+    log(VERBOSE, 'Activity page likes');
     document.querySelectorAll(`section.activity-row .activity-summary a[href*="${slug}"]:not(${removedSelector})`).forEach(posterElement => {
       removeFilterFromElement(posterElement, 3);
     });
 
-    // New from friends
+    log(VERBOSE, 'New from friends');
     document.querySelectorAll(`.poster-container ${idMatch}:not(${removedSelector})`).forEach(posterElement => {
       removeFilterFromElement(posterElement, 1);
     });
 
-    // Reviews
+    log(VERBOSE, 'Reviews');
     document.querySelectorAll(`.review-tile ${idMatch}:not(${removedSelector})`).forEach(posterElement => {
       removeFilterFromElement(posterElement, 3);
     });
 
-    // Diary
+    log(VERBOSE, 'Diary');
     document.querySelectorAll(`.td-film-details [data-original-img-src]${idMatch}:not(${removedSelector})`).forEach(posterElement => {
       removeFilterFromElement(posterElement, 2);
     });
 
-    // Popular with friends, competitions
+    log(VERBOSE, 'Popular with friends, competitions');
     const remainingElements = document.querySelectorAll(
-      `div:not(.popmenu):not(.actions-panel) ${idMatch}:not(aside [data-film-id="${id}"]):not(${removedSelector})`,
+      `div:not(.popmenu):not(.actions-panel) ${idMatch}:not(aside [data-film-id="${id}"]):not(#backdrop):not(${removedSelector})`,
     );
     remainingElements.forEach(posterElement => {
       removeFilterFromElement(posterElement, 0);

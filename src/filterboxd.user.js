@@ -1718,12 +1718,12 @@
     updateBehaviorCSSVariables(filterName, behaviorType);
 
     if (behaviorType === 'Fade') {
-      const behaviorFadeAmount = formRows[1].querySelector('select').value;
+      const behaviorFadeAmount = formRows[1].querySelector('input').value;
       log(DEBUG, 'behaviorFadeAmount', behaviorFadeAmount);
 
       GMC.set(`${filterName}BehaviorFadeAmount`, behaviorFadeAmount);
     } else if (behaviorType === 'Blur') {
-      const behaviorBlurAmount = formRows[2].querySelector('select').value;
+      const behaviorBlurAmount = formRows[2].querySelector('input').value;
       log(DEBUG, 'behaviorBlurAmount', behaviorBlurAmount);
 
       GMC.set(`${filterName}BehaviorBlurAmount`, behaviorBlurAmount);

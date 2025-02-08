@@ -1219,7 +1219,7 @@
 
       let titleLinkText = filteredFilm.name;
       if (['', 'null', 'undefined'].includes(filteredFilm.name.toString())) {
-        logError('filteredFilm is invalid', filteredFilm);
+        logError('filteredFilm has no name; marking as broken', filteredFilm);
         titleLinkText = 'Broken, please remove';
       }
 
@@ -1580,7 +1580,7 @@
       return false;
     }
 
-    const secondLastListItem = userpanel.querySelector('li:nth-last-child(2)');
+    const secondLastListItem = userpanel.querySelector('li:nth-last-child(3)');
     if (!secondLastListItem ) {
       log(INFO, 'Second last list item not found');
       return false;
@@ -1597,7 +1597,15 @@
     const unorderedList = userpanel.querySelector('ul');
     userscriptListItem = buildUserscriptLink(userscriptListItem, unorderedList);
 
-    secondLastListItem.parentNode.insertBefore(userscriptListItem, userpanel.querySelector('li:nth-last-of-type(1)'));
+    // Text: "Go PATRON to change images"
+    const upsellLink = userpanel.querySelector('[href="/pro/"]');
+
+    // If the upsell link is present, insert above
+    // Otherwise, inset above "Share"
+    const insertBeforeElementIndex = upsellLink ? 2 : 1;
+    const insertBeforeElement = userpanel.querySelector(`li:nth-last-of-type(${insertBeforeElementIndex})`);
+
+    secondLastListItem.parentNode.insertBefore(userscriptListItem, insertBeforeElement);
 
     return true;
   }

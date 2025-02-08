@@ -704,6 +704,8 @@
   }
 
   function buildUserscriptLink(userscriptListItem, unorderedList) {
+    log(DEBUG, 'buildUserscriptLink()');
+
     const userscriptLink = userscriptListItem.firstElementChild;
     userscriptListItem.onclick = (event) => {
       event.preventDefault();
@@ -764,6 +766,8 @@
   }
 
   function buildToggleSection(parentElement, sectionTitle, filerName, sectionMetadata) {
+    log(DEBUG, 'buildToggleSection()');
+
     const formRowDiv = document.createElement('div');
     parentElement.appendChild(formRowDiv);
 
@@ -807,6 +811,8 @@
     notes = '',
     notesStyle = '',
   }) {
+    log(DEBUG, 'createFormRow()');
+
     const formRow = document.createElement('div');
     formRow.classList.add('form-row');
     formRow.style.cssText = formRowStyle;
@@ -871,6 +877,8 @@
   }
 
   function displaySavedBadge() {
+    log(DEBUG, 'displaySavedBadge()');
+
     const savedBadge = document.querySelector(`.${SELECTORS.settings.savedBadgeClass}`);
 
     savedBadge.classList.remove('hidden');
@@ -887,10 +895,14 @@
   }
 
   function getFilter(filterName) {
+    log(DEBUG, 'getFilter()');
+
     return JSON.parse(GMC.get(filterName));
   }
 
   function getFilterBehaviorStyle(filterName) {
+    log(DEBUG, 'getFilterBehaviorStyle()');
+
     let behaviorStyle;
     let behaviorType = GMC.get(`${filterName}BehaviorType`);
     log(VERBOSE, 'behaviorType', behaviorType);
@@ -1228,12 +1240,12 @@
       filteredTitleLink.setAttribute('data-film-id', filteredFilm.id);
 
       let titleLinkText = filteredFilm.name;
-      if (['', 'null', 'undefined'].includes(filteredFilm.name.toString())) {
+      if (['', 'null', 'undefined'].includes(filteredFilm.name)) {
         logError('filteredFilm has no name; marking as broken', filteredFilm);
         titleLinkText = 'Broken, please remove';
       }
 
-      if (!['', 'null', 'undefined'].includes(filteredFilm.year.toString())) {
+      if (!['', 'null', 'undefined'].includes(filteredFilm.year)) {
         titleLinkText += ` (${filteredFilm.year})`;
       }
       filteredTitleLink.innerText = titleLinkText;
@@ -1663,6 +1675,8 @@
   }
 
   function removeFromFilmFilter(filmMetadata) {
+    log(DEBUG, 'removeFromFilmFilter()');
+
     let filmFilter = getFilter('filmFilter');
     filmFilter = filmFilter.filter(filteredFilm => filteredFilm.id !== filmMetadata.id);
 
@@ -1710,6 +1724,8 @@
   }
 
   function saveBehaviorSettings(filterName, formRows) {
+    log(DEBUG, 'saveBehaviorSettings()');
+
     const behaviorType = formRows[0].querySelector('select').value;
     log(DEBUG, 'behaviorType', behaviorType);
 
@@ -1743,6 +1759,8 @@
   }
 
   function setFilter(filterName, filterValue) {
+    log(DEBUG, 'setFilter()');
+
     GMC.set(filterName, JSON.stringify(filterValue));
     return GMC.save();
   }

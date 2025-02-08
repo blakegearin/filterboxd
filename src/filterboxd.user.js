@@ -20,22 +20,22 @@
 (function() {
   'use strict';
 
-  const RESET = false;
+  const USERSCRIPT_NAME = 'Filterboxd';
 
+  // Log levels
   const SILENT = 0;
   const QUIET = 1;
   const INFO = 2;
   const DEBUG = 3;
   const VERBOSE = 4;
   const TRACE = 5;
+  let CURRENT_LOG_LEVEL;
 
-  // Default
-  let CURRENT_LOG_LEVEL = INFO;
+  // Change to true if you want to clear your local data
+  const RESET_DATA = false;
 
-  // Override
-  let LOG_LEVEL_OVERRIDE = null;
-
-  const USERSCRIPT_NAME = 'Filterboxd';
+  // Change to SILENT, QUIET, INFO, DEBUG, VERBOSE, or TRACE
+  const LOG_LEVEL_OVERRIDE = null;
 
   function log(level, message, variable = -1) {
     if (CURRENT_LOG_LEVEL < level) return;
@@ -751,6 +751,7 @@
     const titleName = unorderedList.querySelector('[data-film-name]')?.getAttribute('data-film-name');
     if (titleName) userscriptLink.setAttribute('data-film-name', titleName);
 
+    // Title year isn't present in the pop menu list, so retrieve it from the film poster
     const titleYear = document.querySelector(`[data-film-id='${titleId}'].film-poster .has-menu`)
       ?.getAttribute('data-original-title')
       ?.match(/\((\d{4})\)/)
@@ -945,7 +946,7 @@
 
     GMC.css.basic = '';
 
-    if (RESET) {
+    if (RESET_DATA) {
       log(QUIET, 'Resetting GMC');
 
       setFilter('filmFilter', []);

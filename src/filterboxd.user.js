@@ -291,15 +291,9 @@
         return;
       }
 
-      const addToListLink = filmPosterPopMenu.querySelector(SELECTORS.filmPosterPopMenu.addToList);
-      if (!addToListLink) {
-        logError(`Selector ${SELECTORS.filmPosterPopMenu.addToList} not found`);
-        return;
-      }
-
-      const addThisFilmLink = filmPosterPopMenu.querySelector(SELECTORS.filmPosterPopMenu.addThisFilm);
-      if (!addThisFilmLink) {
-        logError(`Selector ${SELECTORS.filmPosterPopMenu.addThisFilm} not found`);
+      const unorderedList = filmPosterPopMenu.querySelector('ul');
+      if (!unorderedList) {
+        logError(`Selector ${SELECTORS.filmPosterPopMenu.self} ul not found`);
         return;
       }
 
@@ -307,7 +301,7 @@
         let userscriptListItem = lastListItem.cloneNode(true);
         userscriptListItem.classList.add(SELECTORS.filmPosterPopMenu.userscriptListItemClass);
 
-        userscriptListItem = buildUserscriptLink(userscriptListItem, addToListLink, addThisFilmLink);
+        userscriptListItem = buildUserscriptLink(userscriptListItem, unorderedList);
         lastListItem.parentNode.append(userscriptListItem);
       });
 
@@ -701,7 +695,7 @@
     });
   }
 
-  function buildUserscriptLink(userscriptListItem, addToListLink, addThisFilmLink) {
+  function buildUserscriptLink(userscriptListItem, unorderedList) {
     const userscriptLink = userscriptListItem.firstElementChild;
     userscriptListItem.onclick = (event) => {
       event.preventDefault();
@@ -736,19 +730,20 @@
       });
     };
 
-    const titleId = parseInt(addToListLink.getAttribute('data-film-id'));
-    userscriptLink.setAttribute('data-film-id', titleId);
+    const titleId = unorderedList.querySelector('[data-film-id]')?.getAttribute('data-film-id');
+    if (titleId) userscriptLink.setAttribute('data-film-id', titleId);
 
-    const filmAction = addToListLink.getAttribute('data-new-list-with-film-action');
-    log(VERBOSE, 'filmAction', filmAction);
+    const titleSlug = unorderedList.querySelector('[data-film-slug]')?.getAttribute('data-film-slug');
+    if (titleSlug) userscriptLink.setAttribute('data-film-slug', titleSlug);
 
-    const titleSlug = filmAction.split('/').at(-2);
-    userscriptLink.setAttribute('data-film-slug', titleSlug);
+    const titleName = unorderedList.querySelector('[data-film-name]')?.getAttribute('data-film-name');
+    if (titleName) userscriptLink.setAttribute('data-film-name', titleName);
 
-    const titleName = addThisFilmLink.getAttribute('data-film-name');
-    userscriptLink.setAttribute('data-film-name', titleName);
-    const titleYear = addThisFilmLink.getAttribute('data-film-release-year');
-    userscriptLink.setAttribute('data-film-release-year', titleYear);
+    const titleYear = document.querySelector(`[data-film-id='${titleId}'].film-poster .has-menu`)
+      ?.getAttribute('data-original-title')
+      ?.match(/\((\d{4})\)/)
+      ?.[1];
+    if (titleYear) userscriptLink.setAttribute('data-film-release-year', titleYear);
 
     const titleIsHidden = getFilter('filmFilter').some(filteredFilm => filteredFilm.id === titleId);
     updateLinkInPopMenu(titleIsHidden, userscriptLink);
@@ -1221,7 +1216,17 @@
         SELECTORS.settings.filteredTitleLinkClass,
       );
       filteredTitleLink.setAttribute('data-film-id', filteredFilm.id);
-      filteredTitleLink.innerText = `${filteredFilm.name} (${filteredFilm.year})`;
+
+      let titleLinkText = filteredFilm.name;
+      if (['', 'null', 'undefined'].includes(filteredFilm.name.toString())) {
+        logError('filteredFilm is invalid', filteredFilm);
+        titleLinkText = 'Broken, please remove';
+      }
+
+      if (!['', 'null', 'undefined'].includes(filteredFilm.year.toString())) {
+        titleLinkText += ` (${filteredFilm.year})`;
+      }
+      filteredTitleLink.innerText = titleLinkText;
 
       filteredTitleLink.oncontextmenu = (event) => {
         event.preventDefault();
@@ -1589,10 +1594,8 @@
     let userscriptListItem = secondLastListItem.cloneNode(true);
     userscriptListItem.setAttribute('id', SELECTORS.userpanel.userscriptListItemId);
 
-    const addToListLink = secondLastListItem.firstElementChild;
-    const addThisFilmLink = userpanel.querySelector(SELECTORS.userpanel.addThisFilm);
-
-    userscriptListItem = buildUserscriptLink(userscriptListItem, addToListLink, addThisFilmLink);
+    const unorderedList = userpanel.querySelector('ul');
+    userscriptListItem = buildUserscriptLink(userscriptListItem, unorderedList);
 
     secondLastListItem.parentNode.insertBefore(userscriptListItem, userpanel.querySelector('li:nth-last-of-type(1)'));
 

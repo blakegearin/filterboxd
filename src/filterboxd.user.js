@@ -714,6 +714,7 @@
       log(VERBOSE, 'event', event);
 
       const link = event.target;
+      log(VERBOSE, 'link', link);
 
       const id = parseInt(link.getAttribute('data-film-id'));
       const slug = link.getAttribute('data-film-slug');
@@ -743,22 +744,37 @@
     };
 
     const titleId = unorderedList.querySelector('[data-film-id]')?.getAttribute('data-film-id');
+    log(DEBUG, 'titleId', titleId);
     if (titleId) userscriptLink.setAttribute('data-film-id', titleId);
 
-    const titleSlug = unorderedList.querySelector('[data-film-slug]')?.getAttribute('data-film-slug');
+    const filmPoster = document.querySelector(`[data-film-id='${titleId}'].film-poster`);
+    log(DEBUG, 'filmPoster', filmPoster);
+
+    const titleSlug = unorderedList.querySelector('[data-film-slug]')?.getAttribute('data-film-slug')
+      || filmPoster.getAttribute('data-film-slug');
+    log(DEBUG, 'titleSlug', titleSlug);
     if (titleSlug) userscriptLink.setAttribute('data-film-slug', titleSlug);
 
     const titleName = unorderedList.querySelector('[data-film-name]')?.getAttribute('data-film-name');
+    log(DEBUG, 'titleName', titleName);
     if (titleName) userscriptLink.setAttribute('data-film-name', titleName);
 
     // Title year isn't present in the pop menu list, so retrieve it from the film poster
-    const titleYear = document.querySelector(`[data-film-id='${titleId}'].film-poster .has-menu`)
+    const titleYear = filmPoster.querySelector('.has-menu')
       ?.getAttribute('data-original-title')
       ?.match(/\((\d{4})\)/)
-      ?.[1];
+      ?.[1] || document.querySelector('div.releaseyear a')?.innerText;
+    log(DEBUG, 'titleYear', titleYear);
     if (titleYear) userscriptLink.setAttribute('data-film-release-year', titleYear);
 
-    const titleIsHidden = getFilter('filmFilter').some(filteredFilm => filteredFilm.id === titleId);
+    const filmFilter = getFilter('filmFilter');
+    log(DEBUG, 'filmFilter', filmFilter);
+
+    const titleIsHidden = filmFilter.some(
+      filteredFilm => filteredFilm.id?.toString() === titleId?.toString(),
+    );
+    log(DEBUG, 'titleIsHidden', titleIsHidden);
+
     updateLinkInPopMenu(titleIsHidden, userscriptLink);
 
     userscriptLink.removeAttribute('class');
@@ -1231,7 +1247,7 @@
       let filteredTitleLink = document.createElement('a');
       hiddenTitlesParagraph.appendChild(filteredTitleLink);
 
-      filteredTitleLink.href= `/film/${filteredFilm.slug}`;
+      if (filteredFilm.slug) filteredTitleLink.href= `/film/${filteredFilm.slug}`;
 
       filteredTitleLink.classList.add(
         'text-slug',

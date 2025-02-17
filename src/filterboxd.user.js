@@ -267,7 +267,7 @@
     },
     userpanel: {
       self: '#userpanel',
-      userscriptListItemId: 'filterboxd-list-item',
+      userscriptListItemId: 'filterboxd-userpanel-list-item',
       addThisFilm: '#userpanel .add-this-film',
     },
   };
@@ -739,7 +739,15 @@
           addToHiddenTitles(filmMetadata);
         }
 
-        updateLinkInPopMenu(!titleIsHidden, link);
+        const sidebarLink = document.querySelector(createId(SELECTORS.userpanel.userscriptListItemId));
+        if (sidebarLink) {
+          updateLinkInPopMenu(!titleIsHidden, sidebarLink);
+
+          const popupLink = document.querySelector(`.${SELECTORS.filmPosterPopMenu.userscriptListItemClass} a`);
+          if (popupLink) updateLinkInPopMenu(!titleIsHidden, popupLink);
+        } else {
+          updateLinkInPopMenu(!titleIsHidden, link);
+        }
       });
     };
 
@@ -760,10 +768,13 @@
     if (titleName) userscriptLink.setAttribute('data-film-name', titleName);
 
     // Title year isn't present in the pop menu list, so retrieve it from the film poster
-    const titleYear = filmPoster.querySelector('.has-menu')
-      ?.getAttribute('data-original-title')
-      ?.match(/\((\d{4})\)/)
-      ?.[1] || document.querySelector('div.releaseyear a')?.innerText;
+    const titleYear =
+      filmPoster.querySelector('.has-menu')
+        ?.getAttribute('data-original-title')
+        ?.match(/\((\d{4})\)/)
+        ?.[1]
+      || document.querySelector('div.releaseyear a')?.innerText
+      || document.querySelector('small.metadata a')?.innerText;
     log(DEBUG, 'titleYear', titleYear);
     if (titleYear) userscriptLink.setAttribute('data-film-release-year', titleYear);
 
@@ -1257,12 +1268,12 @@
       filteredTitleLink.setAttribute('data-film-id', filteredFilm.id);
 
       let titleLinkText = filteredFilm.name;
-      if (['', 'null', 'undefined'].includes(filteredFilm.name)) {
-        logError('filteredFilm has no name; marking as broken', filteredFilm);
+      if (['', null, undefined].includes(filteredFilm.name)) {
+        log(INFO, 'filteredFilm has no name; marking as broken', filteredFilm);
         titleLinkText = 'Broken, please remove';
       }
 
-      if (!['', 'null', 'undefined'].includes(filteredFilm.year)) {
+      if (!['', null, undefined].includes(filteredFilm.year)) {
         titleLinkText += ` (${filteredFilm.year})`;
       }
       filteredTitleLink.innerText = titleLinkText;
@@ -1606,8 +1617,8 @@
   function maybeAddListItemToSidebar() {
     log(DEBUG, 'maybeAddListItemToSidebar()');
 
-    const userscriptListItemId = document.querySelector(createId(SELECTORS.userpanel.userscriptListItemId));
-    if (userscriptListItemId) {
+    const userscriptListItemFound = document.querySelector(createId(SELECTORS.userpanel.userscriptListItemId));
+    if (userscriptListItemFound) {
       log(DEBUG, 'Userscript list item already exists');
       return false;
     }

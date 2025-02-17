@@ -1250,7 +1250,7 @@
     const filmFilter = getFilter('filmFilter');
     log(VERBOSE, 'filmFilter', filmFilter);
 
-    filmFilter.forEach(filteredFilm => {
+    filmFilter.forEach((filteredFilm, index) => {
       log(VERBOSE, 'filteredFilm', filteredFilm);
 
       let filteredTitleLink = document.createElement('a');
@@ -1264,6 +1264,7 @@
         SELECTORS.settings.filteredTitleLinkClass,
       );
       filteredTitleLink.setAttribute('data-film-id', filteredFilm.id);
+      filteredTitleLink.setAttribute('index', index);
 
       let titleLinkText = filteredFilm.name;
       if (['', null, undefined].includes(filteredFilm.name)) {
@@ -1507,8 +1508,13 @@
         const id = parseInt(removalLink.getAttribute('data-film-id'));
         const filteredFilm = filmFilter.find(filteredFilm => filteredFilm.id === id);
 
-        removeFilterFromFilm(filteredFilm);
-        removeFromFilmFilter(filteredFilm);
+        if (filteredFilm) {
+          removeFilterFromFilm(filteredFilm);
+          removeFromFilmFilter(filteredFilm);
+        } else {
+          const index = removalLink.getAttribute('index');
+          removeFromFilmFilter(null, index);
+        }
         removalLink.remove();
       });
 
@@ -1700,11 +1706,15 @@
     }
   }
 
-  function removeFromFilmFilter(filmMetadata) {
+  function removeFromFilmFilter(filmMetadata, index) {
     log(DEBUG, 'removeFromFilmFilter()');
 
     let filmFilter = getFilter('filmFilter');
-    filmFilter = filmFilter.filter(filteredFilm => filteredFilm.id !== filmMetadata.id);
+    if (filmMetadata) {
+      filmFilter = filmFilter.filter(filteredFilm => filteredFilm.id !== filmMetadata.id);
+    } else {
+      filmFilter.splice(index, 1);
+    }
 
     setFilter('filmFilter', filmFilter);
   }

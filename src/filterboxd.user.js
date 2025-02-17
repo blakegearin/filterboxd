@@ -330,42 +330,42 @@
 
     if (replaceBehavior) appliedSelector = '[data-original-img-src]';
 
-    // Activity page reviews
+    log(VERBOSE, 'Activity page reviews');
     document.querySelectorAll(`section.activity-row ${idMatch}`).forEach(posterElement => {
       applyFilterToFilm(posterElement, 3);
 
       pageUpdated = true;
     });
 
-    // Activity page likes
+    log(VERBOSE, 'Activity page likes');
     document.querySelectorAll(`section.activity-row .activity-summary a[href*="${slug}"]:not(${appliedSelector})`).forEach(posterElement => {
       applyFilterToFilm(posterElement, 3);
 
       pageUpdated = true;
     });
 
-    // New from friends
+    log(VERBOSE, 'New from friends');
     document.querySelectorAll(`.poster-container ${idMatch}:not(${appliedSelector})`).forEach(posterElement => {
       applyFilterToFilm(posterElement, 1);
 
       pageUpdated = true;
     });
 
-    // Reviews
+    log(VERBOSE, 'Reviews');
     document.querySelectorAll(`.review-tile ${idMatch}:not(${appliedSelector})`).forEach(posterElement => {
       applyFilterToFilm(posterElement, 3);
 
       pageUpdated = true;
     });
 
-    // Diary
+    log(VERBOSE, 'Diary');
     document.querySelectorAll(`.td-film-details [data-original-img-src]${idMatch}:not(${appliedSelector})`).forEach(posterElement => {
       applyFilterToFilm(posterElement, 2);
 
       pageUpdated = true;
     });
 
-    // Popular with friends, competitions
+    log(VERBOSE, 'Popular with friends, competitions');
     const remainingElements = document.querySelectorAll(
       `div:not(.popmenu):not(.actions-panel) ${idMatch}:not(aside [data-film-id="${id}"]):not(${appliedSelector})`,
     );
@@ -758,7 +758,13 @@
     const filmPoster = document.querySelector(`[data-film-id='${titleId}'].film-poster`);
     log(DEBUG, 'filmPoster', filmPoster);
 
-    const titleSlug = unorderedList.querySelector('[data-film-slug]')?.getAttribute('data-film-slug')
+    if (!filmPoster) {
+      logError('No film poster found');
+      log(INFO, 'unorderedList', unorderedList);
+    }
+
+    const titleSlug =
+      unorderedList.querySelector('[data-film-slug]')?.getAttribute('data-film-slug')
       || filmPoster.getAttribute('data-film-slug');
     log(DEBUG, 'titleSlug', titleSlug);
     if (titleSlug) userscriptLink.setAttribute('data-film-slug', titleSlug);
@@ -769,10 +775,10 @@
 
     // Title year isn't present in the pop menu list, so retrieve it from the film poster
     const titleYear =
-      filmPoster.querySelector('.has-menu')?.getAttribute('data-original-title')?.match(/\((\d{4})\)/)?.[1]
+      filmPoster?.querySelector('.has-menu')?.getAttribute('data-original-title')?.match(/\((\d{4})\)/)?.[1]
       || document.querySelector('div.releaseyear a')?.innerText
       || document.querySelector('small.metadata a')?.innerText
-      || filmPoster.querySelector('.frame-title')?.innerText?.match(/\((\d{4})\)/)?.[1];
+      || filmPoster?.querySelector('.frame-title')?.innerText?.match(/\((\d{4})\)/)?.[1];
     log(DEBUG, 'titleYear', titleYear);
     if (titleYear) userscriptLink.setAttribute('data-film-release-year', titleYear);
 
@@ -1620,6 +1626,9 @@
 
   function maybeAddListItemToSidebar() {
     log(DEBUG, 'maybeAddListItemToSidebar()');
+
+    const isListPage = document.querySelector('body.list-page');
+    if (isListPage) return;
 
     const userscriptListItemFound = document.querySelector(createId(SELECTORS.userpanel.userscriptListItemId));
     if (userscriptListItemFound) {

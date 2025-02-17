@@ -769,12 +769,10 @@
 
     // Title year isn't present in the pop menu list, so retrieve it from the film poster
     const titleYear =
-      filmPoster.querySelector('.has-menu')
-        ?.getAttribute('data-original-title')
-        ?.match(/\((\d{4})\)/)
-        ?.[1]
+      filmPoster.querySelector('.has-menu')?.getAttribute('data-original-title')?.match(/\((\d{4})\)/)?.[1]
       || document.querySelector('div.releaseyear a')?.innerText
-      || document.querySelector('small.metadata a')?.innerText;
+      || document.querySelector('small.metadata a')?.innerText
+      || filmPoster.querySelector('.frame-title')?.innerText?.match(/\((\d{4})\)/)?.[1];
     log(DEBUG, 'titleYear', titleYear);
     if (titleYear) userscriptLink.setAttribute('data-film-release-year', titleYear);
 

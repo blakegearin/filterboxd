@@ -8,7 +8,7 @@
 // @require      https://openuserjs.org/src/libs/sizzle/GM_config.js
 // @grant        GM.getValue
 // @grant        GM.setValue
-// @icon         https://raw.githubusercontent.com/blakegearin/filterboxd/main/img/logo.svg
+// @icon         https://raw.githubusercontent.com/blakegearin/filterboxd/main/img/logo.png
 // @supportURL   https://github.com/blakegearin/filterboxd/issues
 // @license      MIT
 // @copyright    2024–2025, Blake Gearin (https://blakegearin.com)

@@ -751,12 +751,40 @@
       });
     };
 
-    const titleId = unorderedList.querySelector('[data-film-id]')?.getAttribute('data-film-id');
-    log(DEBUG, 'titleId', titleId);
-    if (titleId) userscriptLink.setAttribute('data-film-id', titleId);
+    let filmPosterSelector;
 
-    const filmPoster = document.querySelector(`[data-film-id='${titleId}'].film-poster`);
+    let titleId = unorderedList.querySelector('[data-film-id]')?.getAttribute('data-film-id');
+    log(DEBUG, 'titleId', titleId);
+
+    if (titleId) {
+      filmPosterSelector = `[data-film-id='${titleId}'].film-poster`;
+    } else {
+      const titleName = unorderedList.querySelector('[data-film-name]')?.getAttribute('data-film-name');
+      log(DEBUG, 'titleName', titleName);
+
+      if (titleName) {
+        filmPosterSelector = `[data-film-name='${titleName}'].film-poster`;
+      } else {
+        logError('No film id or name found in unordered list');
+        return;
+      }
+    }
+
+    log(DEBUG, 'filmPosterSelector', filmPosterSelector);
+    const filmPoster = document.querySelector(filmPosterSelector);
     log(DEBUG, 'filmPoster', filmPoster);
+
+    if (!titleId) {
+      titleId = filmPoster?.getAttribute('data-film-id');
+      log(DEBUG, 'titleId', titleId);
+
+      if (!titleId) {
+        logError('No film id found on film poster');
+        return;
+      }
+    }
+
+    userscriptLink.setAttribute('data-film-id', titleId);
 
     if (!filmPoster) {
       logError('No film poster found');
@@ -765,8 +793,9 @@
 
     const titleSlug =
       unorderedList.querySelector('[data-film-slug]')?.getAttribute('data-film-slug')
-      || filmPoster.getAttribute('data-film-slug');
+      || filmPoster?.getAttribute('data-film-slug');
     log(DEBUG, 'titleSlug', titleSlug);
+
     if (titleSlug) userscriptLink.setAttribute('data-film-slug', titleSlug);
 
     const titleName = unorderedList.querySelector('[data-film-name]')?.getAttribute('data-film-name');

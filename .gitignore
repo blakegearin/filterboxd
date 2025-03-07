@@ -4,6 +4,4 @@ node_modules/
 *.afdesign*
 *.xcf
 
-/*.html
-/*.css
-/*.svg
+testing

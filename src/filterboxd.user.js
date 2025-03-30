@@ -20,6 +20,7 @@
 (function() {
   'use strict';
 
+  const VERSION = '1.4.6';
   const USERSCRIPT_NAME = 'Filterboxd';
 
   // Log levels
@@ -29,7 +30,32 @@
   const DEBUG = 3;
   const VERBOSE = 4;
   const TRACE = 5;
-  let CURRENT_LOG_LEVEL;
+
+  const LOG_LEVELS = {
+    default: QUIET,
+    getName: (level) => {
+      return {
+        0: 'silent',
+        1: 'quiet',
+        2: 'info',
+        3: 'debug',
+        4: 'verbose',
+        5: 'trace',
+      }[level];
+    },
+    getValue: (name) => {
+      return {
+        silent: SILENT,
+        quiet: QUIET,
+        info: INFO,
+        debug: DEBUG,
+        verbose: VERBOSE,
+        trace: TRACE,
+      }[name];
+    },
+  };
+
+  let CURRENT_LOG_LEVEL = LOG_LEVELS.default;
 
   // Change to true if you want to clear your local data
   const RESET_DATA = false;
@@ -37,29 +63,36 @@
   // Change to SILENT, QUIET, INFO, DEBUG, VERBOSE, or TRACE
   const LOG_LEVEL_OVERRIDE = null;
 
-  function log(level, message, variable = -1) {
+  function log (level, message, variable = undefined) {
     if (CURRENT_LOG_LEVEL < level) return;
 
-    console.log(`${USERSCRIPT_NAME}: ${message}`);
-    if (variable !== -1) console.log(variable);
+    const levelName = LOG_LEVELS.getName(level);
+
+    const log = `[${VERSION}] [${levelName}] ${USERSCRIPT_NAME}: ${message}`;
+
+    console.groupCollapsed(log);
+
+    if (variable !== undefined) console.dir(variable, { depth: null });
+
+    console.trace();
+    console.groupEnd();
   }
 
-  function logError(message, variable = null) {
-    console.error(`${USERSCRIPT_NAME}: ${message}`);
-    if (variable) console.log(variable);
+  function logError (message, error = undefined) {
+    const log = `[${VERSION}] [error] ${this.extensionName}: ${message}`;
+
+    console.groupCollapsed(log);
+
+    if (error !== undefined) console.error(error);
+
+    console.trace();
+    console.groupEnd();
   }
 
   log(TRACE, 'Starting');
 
   function updateLogLevel() {
-    CURRENT_LOG_LEVEL = {
-      silent: SILENT,
-      quiet: QUIET,
-      info: INFO,
-      debug: DEBUG,
-      verbose: VERBOSE,
-      trace: TRACE,
-    }[GMC.get('logLevel')];
+    CURRENT_LOG_LEVEL = LOG_LEVELS.getValue(GMC.get('logLevel'));
 
     if (LOG_LEVEL_OVERRIDE) CURRENT_LOG_LEVEL = LOG_LEVEL_OVERRIDE;
   }

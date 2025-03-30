@@ -10,7 +10,7 @@
 
 # Filterboxd
 
-![Greasy Fork Version](https://img.shields.io/greasyfork/v/519719-filterboxd?color=%23670000)
+![Dynamic JSON Badge](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgreasyfork.org%2Fscripts%2F519719-filterboxd.json&query=total_installs&suffix=%20installs&label=greasy%20fork&color=%23670000&link=https%3A%2F%2Fgreasyfork.org%2Fen%2Fscripts%2F519719-filterboxd)
 [![MIT License](https://img.shields.io/badge/license-MIT%20License-blue)](LICENSE)
 
 This is a [userscript](https://openuserjs.org/about/Userscript-Beginners-HOWTO) to filter content on [Letterboxd](https://letterboxd.com).

@@ -22,6 +22,7 @@
 
   const VERSION = '1.4.6';
   const USERSCRIPT_NAME = 'Filterboxd';
+  let GMC = null;
 
   // Log levels
   const SILENT = 0;
@@ -31,8 +32,19 @@
   const VERBOSE = 4;
   const TRACE = 5;
 
+  // Change to true if you want to clear all your local data; this is irreversible
+  const RESET_DATA = false;
+
   const LOG_LEVELS = {
-    default: QUIET,
+    default: 'quiet',
+    options: [
+      'silent',
+      'quiet',
+      'info',
+      'debug',
+      'verbose',
+      'trace',
+    ],
     getName: (level) => {
       return {
         0: 'silent',
@@ -55,16 +67,14 @@
     },
   };
 
-  let CURRENT_LOG_LEVEL = LOG_LEVELS.default;
+  function currentLogLevel() {
+    if (GMC === null) return LOG_LEVELS.getValue(LOG_LEVELS.default);
 
-  // Change to true if you want to clear your local data
-  const RESET_DATA = false;
-
-  // Change to SILENT, QUIET, INFO, DEBUG, VERBOSE, or TRACE
-  const LOG_LEVEL_OVERRIDE = null;
+    return LOG_LEVELS.getValue(GMC.get('logLevel'));
+  }
 
   function log (level, message, variable = undefined) {
-    if (CURRENT_LOG_LEVEL < level) return;
+    if (currentLogLevel() < level) return;
 
     const levelName = LOG_LEVELS.getName(level);
 
@@ -79,7 +89,7 @@
   }
 
   function logError (message, error = undefined) {
-    const log = `[${VERSION}] [error] ${this.extensionName}: ${message}`;
+    const log = `[${VERSION}] [error] ${USERSCRIPT_NAME}: ${message}`;
 
     console.groupCollapsed(log);
 
@@ -91,10 +101,34 @@
 
   log(TRACE, 'Starting');
 
-  function updateLogLevel() {
-    CURRENT_LOG_LEVEL = LOG_LEVELS.getValue(GMC.get('logLevel'));
+  function gmcGet(key) {
+    log(DEBUG, 'gmcGet()');
 
-    if (LOG_LEVEL_OVERRIDE) CURRENT_LOG_LEVEL = LOG_LEVEL_OVERRIDE;
+    try {
+      return GMC.get(key);
+    } catch (error) {
+      logError(`Error setting GMC, key=${key}`, error);
+    }
+  }
+
+  function gmcSet(key, value) {
+    log(DEBUG, 'gmcSet()');
+
+    try {
+      return GMC.set(key, value);
+    } catch (error) {
+      logError(`Error setting GMC, key=${key}, value=${value}`, error);
+    }
+  }
+
+  function gmcSave() {
+    log(DEBUG, 'gmcSave()');
+
+    try {
+      return GMC.save();
+    } catch (error) {
+      logError('Error saving GMC', error);
+    }
   }
 
   function startObserving() {
@@ -118,15 +152,14 @@
   }
 
   function mutationsExceedsLimits() {
-    if (IDLE_MUTATION_COUNT > MAX_IDLE_MUTATIONS) {
-      // This is a failsafe to prevent infinite loops
-      logError('MAX_IDLE_MUTATIONS exceeded');
+    // Fail-safes to prevent infinite loops
+    if (IDLE_MUTATION_COUNT > gmcGet('maxIdleMutations')) {
+      logError('Max idle mutations exceeded');
       OBSERVER.disconnect();
 
       return true;
-    } else if (ACTIVE_MUTATION_COUNT >= MAX_ACTIVE_MUTATIONS) {
-      // This is a failsafe to prevent infinite loops
-      logError('MAX_ACTIVE_MUTATIONS exceeded');
+    } else if (ACTIVE_MUTATION_COUNT >= gmcGet('maxActiveMutations')) {
+      logError('Max active mutations exceeded');
       OBSERVER.disconnect();
 
       return true;
@@ -201,8 +234,6 @@
     return `#${string}`;
   }
 
-  const MAX_IDLE_MUTATIONS = 1000;
-  const MAX_ACTIVE_MUTATIONS = 10000;
   const FILM_BEHAVIORS = [
     'Remove',
     'Fade',
@@ -219,6 +250,7 @@
   ];
   const COLUMN_ONE_WIDTH = '33%';
   const COLUMN_TWO_WIDTH = '64.8%';
+  const COLUMN_HALF_WIDTH = '50%';
 
   let IDLE_MUTATION_COUNT = 0;
   let ACTIVE_MUTATION_COUNT = 0;
@@ -358,7 +390,7 @@
     const idMatch = `[data-film-id="${id}"]`;
     let appliedSelector = `.${SELECTORS.processedClass.apply}`;
 
-    const replaceBehavior = GMC.get('filmBehaviorType') === 'Replace poster';
+    const replaceBehavior = gmcGet('filmBehaviorType') === 'Replace poster';
     log(VERBOSE, 'replaceBehavior', replaceBehavior);
 
     if (replaceBehavior) appliedSelector = '[data-original-img-src]';
@@ -432,10 +464,10 @@
     const reviewFilter = getFilter('reviewFilter');
     log(VERBOSE, 'reviewFilter', reviewFilter);
 
-    const replaceBehavior = GMC.get('reviewBehaviorType') === 'Replace text';
+    const replaceBehavior = gmcGet('reviewBehaviorType') === 'Replace text';
     log(VERBOSE, 'replaceBehavior', replaceBehavior);
 
-    const reviewBehaviorReplaceValue = GMC.get('reviewBehaviorReplaceValue');
+    const reviewBehaviorReplaceValue = gmcGet('reviewBehaviorReplaceValue');
     log(VERBOSE, 'reviewBehaviorReplaceValue', reviewBehaviorReplaceValue);
 
     const homepageFilter = getFilter('homepageFilter');
@@ -540,11 +572,11 @@
   function applyFilterToFilm(element, levelsUp = 0) {
     log(DEBUG, 'applyFilterToFilm()');
 
-    const replaceBehavior = GMC.get('filmBehaviorType') === 'Replace poster';
+    const replaceBehavior = gmcGet('filmBehaviorType') === 'Replace poster';
     log(VERBOSE, 'replaceBehavior', replaceBehavior);
 
     if (replaceBehavior) {
-      const filmBehaviorReplaceValue = GMC.get('filmBehaviorReplaceValue');
+      const filmBehaviorReplaceValue = gmcGet('filmBehaviorReplaceValue');
       log(VERBOSE, 'filmBehaviorReplaceValue', filmBehaviorReplaceValue);
 
       const elementImg = element.querySelector('img');
@@ -582,7 +614,7 @@
   }
 
   function buildBehaviorFormRows(parentDiv, filterName, selectArrayValues, behaviorsMetadata) {
-    const behaviorValue = GMC.get(`${filterName}BehaviorType`);
+    const behaviorValue = gmcGet(`${filterName}BehaviorType`);
     log(DEBUG, 'behaviorValue', behaviorValue);
 
     const behaviorChange = (event) => {
@@ -602,7 +634,7 @@
     parentDiv.appendChild(behaviorFormRow);
 
     // Fade amount
-    const behaviorFadeAmount = parseInt(GMC.get(behaviorsMetadata.fade.fieldName));
+    const behaviorFadeAmount = parseInt(gmcGet(behaviorsMetadata.fade.fieldName));
     log(DEBUG, 'behaviorFadeAmount', behaviorFadeAmount);
 
     const fadeAmountFormRow = createFormRow({
@@ -621,7 +653,7 @@
     parentDiv.appendChild(fadeAmountFormRow);
 
     // Blur amount
-    const behaviorBlurAmount = parseInt(GMC.get(behaviorsMetadata.blur.fieldName));
+    const behaviorBlurAmount = parseInt(gmcGet(behaviorsMetadata.blur.fieldName));
     log(DEBUG, 'behaviorBlurAmount', behaviorBlurAmount);
 
     const blurAmountFormRow = createFormRow({
@@ -639,7 +671,7 @@
     parentDiv.appendChild(blurAmountFormRow);
 
     // Replace value
-    const behaviorReplaceValue = GMC.get(behaviorsMetadata.replace.fieldName);
+    const behaviorReplaceValue = gmcGet(behaviorsMetadata.replace.fieldName);
     log(DEBUG, 'behaviorReplaceValue', behaviorReplaceValue);
 
     const replaceValueFormRow = createFormRow({
@@ -652,7 +684,7 @@
     parentDiv.appendChild(replaceValueFormRow);
 
     // Custom CSS
-    const behaviorCustomValue = GMC.get(behaviorsMetadata.custom.fieldName);
+    const behaviorCustomValue = gmcGet(behaviorsMetadata.custom.fieldName);
     log(DEBUG, 'behaviorCustomValue', behaviorCustomValue);
 
     const cssFormRow = createFormRow({
@@ -895,6 +927,7 @@
     formRowClass = [],
     formRowStyle = '',
     labelText = '',
+    helpText = '',
     inputValue = '',
     inputType = 'text',
     inputMin = null,
@@ -922,6 +955,17 @@
 
     label.classList.add('label');
     label.textContent = labelText;
+
+    if (helpText) {
+      const helpIcon = document.createElement('span');
+      label.appendChild(helpIcon);
+
+      helpIcon.classList.add('s', 'icon-14', 'icon-tip', 'tooltip');
+      helpIcon.setAttribute('target', '_blank');
+      helpIcon.setAttribute('data-html', 'true');
+      helpIcon.setAttribute('data-original-title', helpText);
+      helpIcon.innerHTML = '<span class="icon"></span>(Help)';
+    }
 
     const inputDiv = document.createElement('div');
     selectList.appendChild(inputDiv);
@@ -991,23 +1035,23 @@
   function getFilter(filterName) {
     log(DEBUG, 'getFilter()');
 
-    return JSON.parse(GMC.get(filterName));
+    return JSON.parse(gmcGet(filterName));
   }
 
   function getFilterBehaviorStyle(filterName) {
     log(DEBUG, 'getFilterBehaviorStyle()');
 
     let behaviorStyle;
-    let behaviorType = GMC.get(`${filterName}BehaviorType`);
-    log(VERBOSE, 'behaviorType', behaviorType);
+    let behaviorType = gmcGet(`${filterName}BehaviorType`);
+    log(DEBUG, 'behaviorType', behaviorType);
 
-    const behaviorFadeAmount = GMC.get(`${filterName}BehaviorFadeAmount`);
+    const behaviorFadeAmount = gmcGet(`${filterName}BehaviorFadeAmount`);
     log(VERBOSE, 'behaviorFadeAmount', behaviorFadeAmount);
 
-    const behaviorBlurAmount = GMC.get(`${filterName}BehaviorBlurAmount`);
+    const behaviorBlurAmount = gmcGet(`${filterName}BehaviorBlurAmount`);
     log(VERBOSE, 'behaviorBlurAmount', behaviorBlurAmount);
 
-    const behaviorCustomValue = GMC.get(`${filterName}BehaviorCustomValue`);
+    const behaviorCustomValue = gmcGet(`${filterName}BehaviorCustomValue`);
     log(VERBOSE, 'behaviorCustomValue', behaviorCustomValue);
 
     switch (behaviorType) {
@@ -1032,9 +1076,6 @@
 
   function gmcInitialized() {
     log(DEBUG, 'gmcInitialized()');
-
-    updateLogLevel();
-
     log(QUIET, 'Running');
 
     GMC.css.basic = '';
@@ -1042,11 +1083,12 @@
     if (RESET_DATA) {
       log(QUIET, 'Resetting GMC');
 
-      setFilter('filmFilter', []);
-      setFilter('reviewFilter', {});
-      setFilter('homepageFilter', {});
+      for (const [key, field] of Object.entries(GMC_FIELDS)) {
+        const value = field.default;
+        gmcSet(key, value);
+      }
 
-      GMC.save();
+      log(QUIET, 'GMC reset');
     }
 
     let userscriptStyle = document.createElement('style');
@@ -1113,6 +1155,55 @@
       startObserving();
     }
   }
+
+  function trySelectFilterboxdTab() {
+    const maxAttempts = 10;
+    let attempts = 0;
+    let successes = 0;
+
+    log(DEBUG, `Attempting to select Filterboxd tab (attempt ${attempts + 1}/${maxAttempts})`);
+
+    const tabLink = document.querySelector('a[data-id="filterboxd"]');
+    if (!tabLink) {
+      log(DEBUG, 'Filterboxd tab link not found yet');
+      if (attempts < maxAttempts) {
+        attempts++;
+        setTimeout(trySelectFilterboxdTab, 100);
+      } else {
+        logError('Failed to find Filterboxd tab after maximum attempts');
+      }
+      return;
+    }
+
+    try {
+      tabLink.click();
+
+      setTimeout(() => {
+        const tabSelected = document.querySelector('li.selected:has(a[data-id="filterboxd"])') !== null;
+        if (tabSelected) {
+          log(DEBUG, 'Filterboxd tab selected successfully');
+          successes++;
+
+          // There's a race condition between the click and the "Profile" tab being loaded and selected
+          if (successes < 2) setTimeout(trySelectFilterboxdTab, 500);
+        } else {
+          log(DEBUG, 'Click didn\'t select the tab properly');
+          if (attempts < maxAttempts) {
+            attempts++;
+            setTimeout(trySelectFilterboxdTab, 100);
+          } else {
+            logError('Failed to select Filterboxd tab after maximum attempts');
+          }
+        }
+      }, 50);
+    } catch (error) {
+      logError('Error selecting Filterboxd tab', error);
+      if (attempts < maxAttempts) {
+        attempts++;
+        setTimeout(trySelectFilterboxdTab, 100);
+      }
+    }
+  };
 
   function maybeAddConfigurationToSettings() {
     log(DEBUG, 'maybeAddConfigurationToSettings()');
@@ -1293,6 +1384,75 @@
       filmPageFilterMetadata,
     );
 
+    // Advanced Options
+    const formRowDiv = document.createElement('div');
+    asideColumn.appendChild(formRowDiv);
+
+    formRowDiv.style.cssText = 'margin-bottom: 40px;';
+
+    const sectionHeader = document.createElement('h3');
+    formRowDiv.append(sectionHeader);
+
+    sectionHeader.classList.add('title-3');
+    sectionHeader.style.cssText = 'margin-top: 0em;';
+    sectionHeader.innerText = 'Advanced Options';
+
+    const logLevelValue = gmcGet('logLevel');
+    log(DEBUG, 'logLevelValue', logLevelValue);
+
+    const logLevelFormRow = createFormRow({
+      formRowClass: ['update-details'],
+      formRowStyle: `width: ${COLUMN_ONE_WIDTH};`,
+      labelText: 'Log level ',
+      helpText: 'Determines how much logging<br /> is visible in the browser console',
+      inputValue: logLevelValue,
+      inputType: 'select',
+      selectArray: LOG_LEVELS.options,
+    });
+
+    formRowDiv.appendChild(logLevelFormRow);
+
+    const mutationsDiv = document.createElement('div');
+    mutationsDiv.style.cssText = 'display: flex; align-items: center;';
+    formRowDiv.append(mutationsDiv);
+
+    const maxActiveMutationsValue = gmcGet('maxActiveMutations');
+    log(DEBUG, 'maxActiveMutationsValue', maxActiveMutationsValue);
+
+    const maxActiveMutationsFormRow = createFormRow({
+      formRowClass: ['update-details'],
+      formRowStyle: `width: ${COLUMN_HALF_WIDTH};`,
+      labelText: 'Max active mutations ',
+      helpText: 'Safety limit that halts execution<br /> when a certain number of modifications<br /> are performed by the script',
+      inputValue: maxActiveMutationsValue,
+      inputType: 'number',
+      inputMin: 1,
+      inputStyle: 'width: 100px !important;',
+    });
+
+    mutationsDiv.appendChild(maxActiveMutationsFormRow);
+
+    const maxIdleMutationsValue = gmcGet('maxIdleMutations');
+    log(DEBUG, 'maxIdleMutationsValue', maxIdleMutationsValue);
+
+    const maxIdleMutationsFormRow = createFormRow({
+      formRowClass: ['update-details'],
+      formRowStyle: `width: ${COLUMN_HALF_WIDTH}; float: right;`,
+      labelText: 'Max idle mutations ',
+      helpText: 'Safety limit that halts execution<br /> when a certain number of modifications<br /> are performed by Letterboxd<br /> that did not result in modifications<br /> from the script',
+      inputValue: maxIdleMutationsValue,
+      inputType: 'number',
+      inputMin: 1,
+      inputStyle: 'width: 100px !important;',
+    });
+
+    mutationsDiv.appendChild(maxIdleMutationsFormRow);
+
+    let formColumnDiv = document.createElement('div');
+    formRowDiv.appendChild(formColumnDiv);
+
+    formColumnDiv.classList.add('form-columns', '-cols2');
+
     // Filter films
     const favoriteFilmsDiv = document.querySelector(SELECTORS.settings.favoriteFilms);
     const filteredFilmsDiv = favoriteFilmsDiv.cloneNode(true);
@@ -1434,7 +1594,7 @@
 
     minimumWordCountDiv.classList.add('form-columns', '-cols2');
 
-    const minimumWordCountValue = GMC.get('reviewMinimumWordCount');
+    const minimumWordCountValue = gmcGet('reviewMinimumWordCount');
     log(DEBUG, 'minimumWordCountValue', minimumWordCountValue);
 
     const minimumWordCountFormRow = createFormRow({
@@ -1589,7 +1749,7 @@
       const minimumWordCountValue = parseInt(minimumWordCountFormRow.querySelector('input').value || 0);
       log(DEBUG, 'minimumWordCountValue', minimumWordCountValue);
 
-      GMC.set('reviewMinimumWordCount', minimumWordCountValue);
+      gmcSet('reviewMinimumWordCount', minimumWordCountValue);
 
       saveBehaviorSettings('film', filmFormRows);
       saveBehaviorSettings('review', reviewFormRows);
@@ -1605,6 +1765,21 @@
         filter[fieldName] = checked;
         setFilter(filterName, filter);
       });
+
+      const logLevel = logLevelFormRow.querySelector('select').value;
+      gmcSet('logLevel', logLevel);
+
+      const maxIdleMutationsValue = parseInt(maxIdleMutationsFormRow.querySelector('input').value || 0);
+      log(DEBUG, 'maxIdleMutationsValue', maxIdleMutationsValue);
+
+      gmcSet('maxIdleMutations', maxIdleMutationsValue);
+
+      const maxActiveMutationsValue = parseInt(maxActiveMutationsFormRow.querySelector('input').value || 0);
+      log(DEBUG, 'maxActiveMutationsValue', maxActiveMutationsValue);
+
+      gmcSet('maxActiveMutations', maxActiveMutationsValue);
+
+      gmcSave();
 
       displaySavedBadge();
     };
@@ -1678,12 +1853,6 @@
         userscriptTabDiv.style.display = 'none';
       };
     });
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const tabSelected = urlParams.get('filterboxd') !== null;
-    log(VERBOSE, 'tabSelected', tabSelected);
-
-    if (tabSelected) window.onload = () => userscriptSubNabLink.click();
   }
 
   function maybeAddListItemToSidebar() {
@@ -1742,7 +1911,7 @@
   function removeFilterFromElement(element, levelsUp = 0) {
     log(DEBUG, 'removeFilterFromElement()');
 
-    const replaceBehavior = GMC.get('filmBehaviorType') === 'Replace poster';
+    const replaceBehavior = gmcGet('filmBehaviorType') === 'Replace poster';
     log(VERBOSE, 'replaceBehavior', replaceBehavior);
 
     if (replaceBehavior) {
@@ -1836,7 +2005,7 @@
     const behaviorType = formRows[0].querySelector('select').value;
     log(DEBUG, 'behaviorType', behaviorType);
 
-    GMC.set(`${filterName}BehaviorType`, behaviorType);
+    gmcSet(`${filterName}BehaviorType`, behaviorType);
 
     updateBehaviorCSSVariables(filterName, behaviorType);
 
@@ -1844,36 +2013,35 @@
       const behaviorFadeAmount = formRows[1].querySelector('input').value;
       log(DEBUG, 'behaviorFadeAmount', behaviorFadeAmount);
 
-      GMC.set(`${filterName}BehaviorFadeAmount`, behaviorFadeAmount);
+      gmcSet(`${filterName}BehaviorFadeAmount`, behaviorFadeAmount);
     } else if (behaviorType === 'Blur') {
       const behaviorBlurAmount = formRows[2].querySelector('input').value;
       log(DEBUG, 'behaviorBlurAmount', behaviorBlurAmount);
 
-      GMC.set(`${filterName}BehaviorBlurAmount`, behaviorBlurAmount);
+      gmcSet(`${filterName}BehaviorBlurAmount`, behaviorBlurAmount);
     } else if (behaviorType.includes('Replace')) {
       const behaviorReplaceValue = formRows[3].querySelector('input').value;
       log(DEBUG, 'behaviorReplaceValue', behaviorReplaceValue);
 
-      GMC.set(`${filterName}BehaviorReplaceValue`, behaviorReplaceValue);
+      gmcSet(`${filterName}BehaviorReplaceValue`, behaviorReplaceValue);
     } else if (behaviorType === 'Custom') {
       const behaviorCustomValue = formRows[4].querySelector('input').value;
       log(DEBUG, 'behaviorCustomValue', behaviorCustomValue);
 
-      GMC.set(`${filterName}BehaviorCustomValue`, behaviorCustomValue);
+      gmcSet(`${filterName}BehaviorCustomValue`, behaviorCustomValue);
     }
-
-    GMC.save();
   }
 
   function setFilter(filterName, filterValue) {
     log(DEBUG, 'setFilter()');
 
-    GMC.set(filterName, JSON.stringify(filterValue));
-    return GMC.save();
+    gmcSet(filterName, JSON.stringify(filterValue));
+    return gmcSave();
   }
 
   function updateBehaviorCSSVariables(filterName, behaviorType) {
     log(DEBUG, 'updateBehaviorTypeVariable()');
+    log(DEBUG, 'behaviorType', behaviorType);
 
     const fadeValue = behaviorType === 'Fade' ? 'block' : 'none';
     document.documentElement.style.setProperty(
@@ -1909,87 +2077,97 @@
     link.innerText = innerText;
   }
 
+  const urlParams = new URLSearchParams(window.location.search);
+  const tabSelected = urlParams.get('filterboxd') !== null;
+  log(DEBUG, 'tabSelected', tabSelected);
+
+  if (tabSelected) trySelectFilterboxdTab();
+
   let OBSERVER = new MutationObserver(observeAndModify);
 
-  let GMC = new GM_config({
+  const GMC_FIELDS = {
+    filmBehaviorType: {
+      type: 'select',
+      options: FILM_BEHAVIORS,
+      default: 'Fade',
+    },
+    filmBehaviorBlurAmount: {
+      type: 'int',
+      default: 3,
+    },
+    filmBehaviorCustomValue: {
+      type: 'text',
+      default: '',
+    },
+    filmBehaviorFadeAmount: {
+      type: 'int',
+      default: 10,
+    },
+    filmBehaviorReplaceValue: {
+      type: 'text',
+      default: 'https://raw.githubusercontent.com/blakegearin/filterboxd/main/img/bee-movie.jpg',
+    },
+    filmFilter: {
+      type: 'text',
+      default: JSON.stringify([]),
+    },
+    filmPageFilter: {
+      type: 'text',
+      default: JSON.stringify({}),
+    },
+    homepageFilter: {
+      type: 'text',
+      default: JSON.stringify({}),
+    },
+    logLevel: {
+      type: 'select',
+      options: LOG_LEVELS.options,
+      default: LOG_LEVELS.default,
+    },
+    reviewBehaviorType: {
+      type: 'select',
+      options: REVIEW_BEHAVIORS,
+      default: 'Fade',
+    },
+    reviewBehaviorBlurAmount: {
+      type: 'int',
+      default: 3,
+    },
+    reviewBehaviorCustomValue: {
+      type: 'text',
+      default: '',
+    },
+    reviewBehaviorFadeAmount: {
+      type: 'int',
+      default: 10,
+    },
+    reviewBehaviorReplaceValue: {
+      type: 'text',
+      default: 'According to all known laws of aviation, there is no way a bee should be able to fly.',
+    },
+    reviewFilter: {
+      type: 'text',
+      default: JSON.stringify({}),
+    },
+    reviewMinimumWordCount: {
+      type: 'int',
+      default: 10,
+    },
+    maxIdleMutations: {
+      type: 'int',
+      default: 10000,
+    },
+    maxActiveMutations: {
+      type: 'int',
+      default: 10000,
+    },
+  };
+
+  GMC = new GM_config({
     id: 'gmc-frame',
     events: {
       init: gmcInitialized,
     },
-    fields: {
-      filmBehaviorType: {
-        type: 'select',
-        options: FILM_BEHAVIORS,
-        default: 'Fade',
-      },
-      filmBehaviorBlurAmount: {
-        type: 'int',
-        default: 3,
-      },
-      filmBehaviorCustomValue: {
-        type: 'text',
-        default: '',
-      },
-      filmBehaviorFadeAmount: {
-        type: 'int',
-        default: 10,
-      },
-      filmBehaviorReplaceValue: {
-        type: 'text',
-        default: 'https://raw.githubusercontent.com/blakegearin/filterboxd/main/img/bee-movie.jpg',
-      },
-      filmFilter: {
-        type: 'text',
-        default: JSON.stringify([]),
-      },
-      filmPageFilter: {
-        type: 'text',
-        default: JSON.stringify({}),
-      },
-      homepageFilter: {
-        type: 'text',
-        default: JSON.stringify({}),
-      },
-      logLevel: {
-        type: 'select',
-        options: [
-          'silent',
-          'quiet',
-          'debug',
-          'verbose',
-          'trace',
-        ],
-        default: 'quiet',
-      },
-      reviewBehaviorType: {
-        type: 'select',
-        options: REVIEW_BEHAVIORS,
-        default: 'Fade',
-      },
-      reviewBehaviorBlurAmount: {
-        type: 'int',
-        default: 3,
-      },
-      reviewBehaviorCustomValue: {
-        type: 'text',
-        default: '',
-      },
-      reviewBehaviorFadeAmount: {
-        type: 'int',
-        default: 10,
-      },
-      reviewBehaviorReplaceValue: {
-        type: 'text',
-        default: 'According to all known laws of aviation, there is no way a bee should be able to fly.',
-      },
-      reviewFilter: {
-        type: 'text',
-        default: JSON.stringify({}),
-      },
-      reviewMinimumWordCount: {
-        type: 'int',
-        default: 10,
-      },
-    },
+    fields: GMC_FIELDS,
   });
 })();

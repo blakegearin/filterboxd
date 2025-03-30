@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Filterboxd
 // @namespace    https://github.com/blakegearin/filterboxd
-// @version      1.4.6
+// @version      1.5.0
 // @description  Filter content on Letterboxd
 // @author       Blake Gearin <hello@blakeg.me> (https://blakegearin.com)
 // @match        https://letterboxd.com/*
@@ -20,7 +20,7 @@
 (function() {
   'use strict';
 
-  const VERSION = '1.4.6';
+  const VERSION = '1.5.0';
   const USERSCRIPT_NAME = 'Filterboxd';
   let GMC = null;
 
@@ -1203,7 +1203,7 @@
         setTimeout(trySelectFilterboxdTab, 100);
       }
     }
-  };
+  }
 
   function maybeAddConfigurationToSettings() {
     log(DEBUG, 'maybeAddConfigurationToSettings()');

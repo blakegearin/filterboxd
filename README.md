@@ -11,6 +11,7 @@
 # Filterboxd
 
 ![Dynamic JSON Badge](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgreasyfork.org%2Fscripts%2F519719-filterboxd.json&query=total_installs&suffix=%20installs&label=greasy%20fork&color=%23670000&link=https%3A%2F%2Fgreasyfork.org%2Fen%2Fscripts%2F519719-filterboxd)
+![Dynamic JSON Badge](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fopenuserjs.org%2Fmeta%2Fblakegearin%2FFilterboxd.meta.json&query=%24.OpenUserJS.installs%5B0%5D.value&suffix=%20installs&label=openuserjs&color=%23202d3b&link=https%3A%2F%2Fopenuserjs.org%2Fscripts%2Fblakegearin%2FFilterboxd)
 [![MIT License](https://img.shields.io/badge/license-MIT%20License-blue)](LICENSE)
 
 This is a [userscript](https://openuserjs.org/about/Userscript-Beginners-HOWTO) to filter content on [Letterboxd](https://letterboxd.com).
